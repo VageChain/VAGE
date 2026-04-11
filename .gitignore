@@ -1,13 +1,36 @@
-# ══════════════════════════════════════════════════════
-#  VageChain Root .gitignore
-# ══════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════
+#  VageChain .gitignore
+#  Covers: Rust workspace (vage/), docs, scripts, whitepaper
+# ══════════════════════════════════════════════════════════════════
 
-# ── Rust workspace (handled by vage/.gitignore) ────────
-vage/target/
-vage/data/
-vage/explorer.db
+# ── Rust build artifacts ───────────────────────────────────────────
+/vage/target/
+target/
+**/*.rs.bk
 
-# ── LaTeX build artifacts ──────────────────────────────
+# ── Runtime databases & state ──────────────────────────────────────
+*.redb
+*.redb-lock
+*.db
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+explorer.db
+/vage/data/
+data/
+
+# ── Secrets & private keys — NEVER COMMIT ─────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+.env
+.env.*
+secrets/
+private_keys/
+
+# ── LaTeX build artifacts ──────────────────────────────────────────
 *.aux
 *.log
 *.out
@@ -20,27 +43,43 @@ vage/explorer.db
 *.bbl
 *.blg
 
-# ── LaTeX generated PDF (keep source .tex, exclude compiled PDF)
-# Uncomment below if you don't want to track the PDF:
-# *.pdf
-
-# ── Python cache (from convert_whitepaper.py) ──────────
+# ── Python cache (convert_whitepaper.py) ──────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 .venv/
 venv/
+*.egg-info/
 
-# ── OS artifacts ───────────────────────────────────────
+# ── Node / npm (explorer frontend) ────────────────────────────────
+node_modules/
+dist/
+.pnp
+.pnp.js
+
+# ── Docker local overrides ────────────────────────────────────────
+docker-compose.override.yml
+
+# ── Benchmarks & profiling ────────────────────────────────────────
+flamegraph.svg
+perf.data
+*.profraw
+*.profdata
+
+# ── OS artifacts ──────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
 *.swp
 *~
 
-# ── Secrets ────────────────────────────────────────────
-.env
-.env.*
-*.secret
-*.pem
-*.key
+# ── IDE artifacts ─────────────────────────────────────────────────
+.vscode/settings.json
+.vscode/*.log
+.idea/
+*.iml
+
+# ── Temporary files ───────────────────────────────────────────────
+*.tmp
+*.bak
+*.orig
