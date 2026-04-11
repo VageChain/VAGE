@@ -1,0 +1,32 @@
+# ── VageChain .gitattributes ──────────────────────────────────────
+# Normalize line endings: LF in repo, auto-convert on Windows checkout
+
+* text=auto
+
+# Force LF for specific text file types
+*.rs      text eol=lf
+*.toml    text eol=lf
+*.json    text eol=lf
+*.md      text eol=lf
+*.yaml    text eol=lf
+*.yml     text eol=lf
+*.sh      text eol=lf
+*.ps1     text eol=crlf
+*.tex     text eol=lf
+*.txt     text eol=lf
+*.css     text eol=lf
+*.html    text eol=lf
+*.js      text eol=lf
+
+# Binary files — never modify line endings
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.pdf     binary
+*.woff    binary
+*.woff2   binary
+*.redb    binary
+*.db      binary
+*.sqlite  binary

@@ -1,0 +1,20 @@
+[package]
+name = "vage-storage"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+redb = "2.1.0"
+vage-block = { path = "../block" }
+vage-types = { path = "../types" }
+anyhow = { workspace = true }
+bincode = { workspace = true }
+primitive-types = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+lru = { workspace = true }
+metrics = { workspace = true }
+rayon = { workspace = true }
+parking_lot = { workspace = true }

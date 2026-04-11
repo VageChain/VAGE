@@ -1,0 +1,46 @@
+# ══════════════════════════════════════════════════════
+#  VageChain Root .gitignore
+# ══════════════════════════════════════════════════════
+
+# ── Rust workspace (handled by vage/.gitignore) ────────
+vage/target/
+vage/data/
+vage/explorer.db
+
+# ── LaTeX build artifacts ──────────────────────────────
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.bbl
+*.blg
+
+# ── LaTeX generated PDF (keep source .tex, exclude compiled PDF)
+# Uncomment below if you don't want to track the PDF:
+# *.pdf
+
+# ── Python cache (from convert_whitepaper.py) ──────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ── OS artifacts ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# ── Secrets ────────────────────────────────────────────
+.env
+.env.*
+*.secret
+*.pem
+*.key

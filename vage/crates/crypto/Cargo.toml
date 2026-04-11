@@ -1,0 +1,23 @@
+[package]
+name = "vage-crypto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sha3 = { workspace = true }
+blake3 = { workspace = true }
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
+ark-bls12-381 = { workspace = true }
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
+bincode = { workspace = true }
+sha2 = { workspace = true }
+vage-types = { path = "../types" }
+rayon = { workspace = true }
+uint = "0.9"
+ark-serialize.workspace = true
+rand_core = "0.10.0"

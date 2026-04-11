@@ -1,0 +1,49 @@
+{
+    "network_name": "vage_devnet_local",
+    "nodes": [
+        {
+            "id": "bootnode-1",
+            "type": "bootnode",
+            "ip": "127.0.0.1",
+            "p2p_port": 30333,
+            "api_port": 8080
+        },
+        {
+            "id": "validator-1",
+            "role": "block_proposer",
+            "ip": "127.0.0.1",
+            "p2p_port": 9000,
+            "api_port": 8081
+        },
+        {
+            "id": "validator-2",
+            "role": "consenter",
+            "ip": "127.0.0.1",
+            "p2p_port": 9001,
+            "api_port": 8082
+        },
+        {
+            "id": "validator-3",
+            "role": "consenter",
+            "ip": "127.0.0.1",
+            "p2p_port": 9002,
+            "api_port": 8083
+        },
+        {
+            "id": "validator-4",
+            "role": "consenter",
+            "ip": "127.0.0.1",
+            "p2p_port": 9003,
+            "api_port": 8084
+        }
+    ],
+    "test_accounts": [
+        {
+            "address": "0x742d35Cc6634C0532925a3b844Bc454e4438f44eCC6634C0532925a3b844Bc45",
+            "initial_balance": "1000000000000000000000000",
+            "label": "Faucet/Admin"
+        }
+    ],
+    "reset_policy": "always_on_startup",
+    "debug_level": "trace"
+}

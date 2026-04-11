@@ -1,0 +1,34 @@
+[package]
+name = "vage-rpc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vage-types = { path = "../types" }
+vage-block = { path = "../block" }
+vage-storage = { path = "../storage" }
+vage-mempool = { path = "../mempool" }
+vage-consensus = { path = "../consensus" }
+vage-networking = { path = "../networking" }
+vage-state = { path = "../state" }
+vage-execution = { path = "../execution" }
+
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+metrics = { workspace = true }
+hex = { workspace = true }
+primitive-types = { workspace = true }
+chrono = { workspace = true }
+governor = "0.6"
+metrics-exporter-prometheus = "0.13"
+
+axum = "0.7"
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "limit"] }
+async-trait = "0.1"
+bincode = "1.3"
+thiserror = "1.0"
+rustls-pemfile = "2.1"

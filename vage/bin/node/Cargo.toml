@@ -1,0 +1,18 @@
+[package]
+name = "vage-node-bin"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "vagechain"
+path = "src/main.rs"
+
+[dependencies]
+vage-node = { path = "../../crates/node" }
+vage-rpc = { path = "../../crates/rpc" }
+tokio = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }

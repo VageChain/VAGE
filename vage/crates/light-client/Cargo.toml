@@ -1,0 +1,24 @@
+[package]
+name = "vage-light-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vage-types = { workspace = true }
+vage-crypto = { path = "../crypto" }
+vage-state = { workspace = true }
+vage-block = { workspace = true }
+vage-zk = { workspace = true }
+vage-networking = { path = "../networking" }
+anyhow = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+libp2p = { workspace = true }
+hex = { workspace = true }
+bincode.workspace = true
+
+[dev-dependencies]
+ed25519-dalek = { workspace = true }
+primitive-types = { workspace = true }
+sha2 = { workspace = true }

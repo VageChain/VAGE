@@ -1,0 +1,38 @@
+[package]
+name = "vage-node"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vage-types = { workspace = true }
+vage-crypto = { path = "../crypto" }
+vage-storage = { path = "../storage" }
+vage-networking = { path = "../networking" }
+vage-mempool = { path = "../mempool" }
+vage-consensus = { path = "../consensus" }
+vage-execution = { path = "../execution" }
+vage-state = { path = "../state" }
+vage-rpc = { path = "../rpc" }
+vage-block = { path = "../block" }
+vage-light-client = { path = "../light-client" }
+vage-zk = { path = "../zk" }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+libp2p = { workspace = true }
+ed25519-dalek = { workspace = true }
+bincode = { workspace = true }
+hex = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+metrics = { workspace = true }
+primitive-types = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+sha2 = { workspace = true }
+zstd = "0.13"
+
+[dev-dependencies]
+ed25519-dalek = { workspace = true }
+bincode = { workspace = true }
+tempfile = "3"
+primitive-types = { workspace = true }

@@ -1,0 +1,13 @@
+[package]
+name = "vage-block"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vage-types = { workspace = true }
+vage-crypto = { path = "../crypto" }
+anyhow = { workspace = true }
+serde = { workspace = true }
+hex = { workspace = true }
+sha2.workspace = true
+ed25519-dalek.workspace = true

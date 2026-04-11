@@ -1,0 +1,67 @@
+{
+    "chain_id": "vage_devnet_1",
+    "initial_height": 0,
+    "genesis_timestamp": 1712073600,
+    "initial_state_root": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "validators": [
+        {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+            "pubkey": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "stake": "1000000000000000000000000",
+            "voting_power": 2500000
+        },
+        {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+            "pubkey": "0xfedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+            "stake": "1000000000000000000000000",
+            "voting_power": 2500000
+        },
+        {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "pubkey": "0x3333333333333333333333333333333333333333333333333333333333333333",
+            "stake": "1000000000000000000000000",
+            "voting_power": 2500000
+        },
+        {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000004",
+            "pubkey": "0x4444444444444444444444444444444444444444444444444444444444444444",
+            "stake": "1000000000000000000000000",
+            "voting_power": 2500000
+        }
+    ],
+    "alloc": {
+        "0x0000000000000000000000000000000000000000000000000000000000000001": {
+            "balance": "1000000000000000000000000000"
+        },
+        "0x0000000000000000000000000000000000000000000000000000000000000002": {
+            "balance": "1000000000000000000000000000"
+        },
+        "0x0000000000000000000000000000000000000000000000000000000000000003": {
+            "balance": "1000000000000000000000000000"
+        },
+        "0x0000000000000000000000000000000000000000000000000000000000000004": {
+            "balance": "1000000000000000000000000000"
+        }
+    },
+    "protocol": {
+        "max_block_gas": 100000000,
+        "max_tx_size_bytes": 131072,
+        "block_time_ms": 1000,
+        "difficulty_target": "0x00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "gas_schedule": {
+        "base_transaction_cost": 21000,
+        "contract_creation_cost": 53000,
+        "verkle_proof_verification": 2500,
+        "state_access_cost": 500,
+        "state_write_cost": 5000,
+        "gas_per_byte": 16
+    },
+    "consensus": {
+        "algorithm": "chained_hotstuff",
+        "quorum_ratio": 0.67,
+        "view_timeout_ms": 5000,
+        "pacemaker_interval_ms": 250,
+        "sharding_enabled": false
+    }
+}

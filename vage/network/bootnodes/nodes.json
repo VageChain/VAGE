@@ -1,0 +1,20 @@
+{
+    "bootnodes": [
+        {
+            "peer_id": "12D3KooW9yE4M7v7uN6L5k8Pq7A8B7r7tN6L5k8Pq7A8B7",
+            "tcp_port": 30333,
+            "ip_address": "34.12.10.20",
+            "multiaddr": "/ip4/34.12.10.20/tcp/30333/p2p/12D3KooW9yE4M7v7uN6L5k8Pq7A8B7r7tN6L5k8Pq7A8B7",
+            "region": "us-east-1",
+            "stable": true
+        },
+        {
+            "peer_id": "12D3KooW9abcD4v4eN9L8k4Pq3A2B1r1tN9L8k4Pq3A2B",
+            "tcp_port": 30333,
+            "ip_address": "34.22.20.10",
+            "multiaddr": "/ip4/34.22.20.10/tcp/30333/p2p/12D3KooW9abcD4v4eN9L8k4Pq3A2B1r1tN9L8k4Pq3A2B",
+            "region": "eu-west-1",
+            "stable": true
+        }
+    ]
+}

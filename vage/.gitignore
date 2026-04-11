@@ -1,0 +1,80 @@
+# ══════════════════════════════════════════════════════
+#  VageChain .gitignore
+# ══════════════════════════════════════════════════════
+
+# ── Rust build artifacts ───────────────────────────────
+/target/
+**/*.rs.bk
+Cargo.lock        # omit for libraries; keep for binaries (optional)
+
+# ── Database files (runtime state, not source) ─────────
+*.redb
+*.redb-lock
+*.db
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+explorer.db
+
+# ── Runtime data directories ───────────────────────────
+/data/
+data/
+
+# ── Secrets & keys — NEVER COMMIT ─────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+.env
+.env.*
+secrets/
+private_keys/
+# Validator real configs (use node.json as template only)
+# Real private keys should be set via VAGE_VALIDATOR_KEY env var
+
+# ── OS artifacts ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# ── IDE artifacts ──────────────────────────────────────
+.vscode/settings.json
+.vscode/*.log
+.idea/
+*.iml
+
+# ── LaTeX build artifacts ──────────────────────────────
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.bbl
+*.blg
+
+# ── Node / npm (if explorer has JS deps) ───────────────
+node_modules/
+dist/
+.pnp
+.pnp.js
+
+# ── Docker volumes / local overrides ──────────────────
+docker-compose.override.yml
+
+# ── Benchmarks & profiling ────────────────────────────
+flamegraph.svg
+perf.data
+*.profraw
+*.profdata
+
+# ── Temporary files ────────────────────────────────────
+*.tmp
+*.bak
+*.orig

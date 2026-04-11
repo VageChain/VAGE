@@ -1,0 +1,28 @@
+[package]
+name = "vage-zk"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ark-ff = { workspace = true }
+ark-ec = { workspace = true }
+ark-groth16 = { workspace = true }
+ark-relations = { workspace = true }
+ark-serialize = { workspace = true }
+ark-bls12-381 = { workspace = true }
+ark-snark = "0.4"
+anyhow = { workspace = true }
+serde = { workspace = true }
+hex = { workspace = true }
+bincode = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+tracing = { workspace = true }
+vage-execution = { workspace = true }
+vage-state = { workspace = true }
+vage-block = { workspace = true }
+vage-storage = { workspace = true }
+sp1-sdk = { version = "3", optional = true }
+
+[features]
+sp1-sdk = ["dep:sp1-sdk"]

@@ -1,0 +1,20 @@
+[package]
+name = "vage-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vage-types = { path = "../../crates/types" }
+vage-crypto = { path = "../../crates/crypto" }
+vage-node = { path = "../../crates/node" }
+clap = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+reqwest = { version = "0.12", features = ["json"] }
+serde_json = { workspace = true }
+serde = { workspace = true }
+hex = { workspace = true }
+ed25519-dalek = "2.1"
+rand = "0.8"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

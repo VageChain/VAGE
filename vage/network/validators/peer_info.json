@@ -1,0 +1,28 @@
+{
+    "nodes": [
+        {
+            "id": "12D3KooW...V1",
+            "address": "0x00...01",
+            "p2p": "/ip4/127.0.0.1/tcp/9000",
+            "role": "bootstrap_validator"
+        },
+        {
+            "id": "12D3KooW...V2",
+            "address": "0x00...02",
+            "p2p": "/ip4/127.0.0.1/tcp/9001",
+            "role": "full_validator"
+        },
+        {
+            "id": "12D3KooW...V3",
+            "address": "0x00...03",
+            "p2p": "/ip4/127.0.0.1/tcp/9002",
+            "role": "full_validator"
+        },
+        {
+            "id": "12D3KooW...V4",
+            "address": "0x00...04",
+            "p2p": "/ip4/127.0.0.1/tcp/9003",
+            "role": "full_validator"
+        }
+    ]
+}

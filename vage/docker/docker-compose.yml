@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # --- Stable Network Entry Point ---
+  vage-bootnode:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: vage-bootnode-1
+    command: ["--config", "network/bootnodes/nodes.json"]
+    ports:
+      - "30333:30333" # Gossip/P2P
+    volumes:
+      - ../data/bootnode:/data/bootnode
+    restart: always
+
+  # --- Consensus Validator Set ---
+  vage-validator-1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: vage-validator-1
+    command: ["--config", "validators/validator-1/node.json"]
+    ports:
+      - "8080:8080" # RPC API
+      - "9000:9000" # P2P
+    volumes:
+      - ../data/validator-1:/data/validator-1
+    depends_on:
+      - vage-bootnode
+    restart: on-failure
+
+  vage-validator-2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: vage-validator-2
+    command: ["--config", "validators/validator-2/node.json"]
+    ports:
+      - "8081:8080"
+      - "9001:9001"
+    volumes:
+      - ../data/validator-2:/data/validator-2
+    depends_on:
+      - vage-bootnode
+    restart: on-failure
+
+  # --- Scalable Read/RPC Layer ---
+  vage-rpc-node:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: vage-rpc-read-node
+    command: ["--config", "network/devnet/nodes.json"]
+    ports:
+      - "8545:8080" # Standardized RPC port
+    depends_on:
+      - vage-bootnode
+      - vage-validator-1
+    restart: always
+
+networks:
+  default:
+    driver: bridge
+    name: vage-net

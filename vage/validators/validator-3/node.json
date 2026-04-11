@@ -1,0 +1,9 @@
+{
+    "_comment": "DEVNET CONFIG TEMPLATE — Set VAGE_VALIDATOR_KEY env var in production. Never commit real private keys.",
+    "storage_path": "data/validator-3/blockchain.redb",
+    "rpc_addr": "127.0.0.1:8082",
+    "p2p_listen_addr": "/ip4/0.0.0.0/tcp/9002",
+    "proposer_private_key": "${VAGE_VALIDATOR_KEY_3}",
+    "bootstrap_peers": [],
+    "max_peers": 64
+}

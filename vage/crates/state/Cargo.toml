@@ -1,0 +1,21 @@
+[package]
+name = "vage-state"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vage-types = { workspace = true }
+vage-storage = { workspace = true }
+vage-crypto = { workspace = true }
+vage-block = { workspace = true }
+ark-ff = { workspace = true }
+ark-serialize = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+hex = { workspace = true }
+tracing = { workspace = true }
+bincode = { workspace = true }
+primitive-types = { workspace = true }
+rayon = { workspace = true }
+parking_lot = { workspace = true }
