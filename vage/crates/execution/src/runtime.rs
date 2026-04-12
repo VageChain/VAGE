@@ -1,11 +1,11 @@
 use crate::gas::{self, GasMeter};
 use anyhow::{anyhow, bail, Result};
-use vage_crypto::hash::sha256;
-use vage_state::{StateBatchOp, StateDb};
-use vage_types::{Address, Log, Transaction};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use vage_crypto::hash::sha256;
+use vage_state::{StateBatchOp, StateDb};
+use vage_types::{Address, Log, Transaction};
 
 const CONTRACT_CODE_PREFIX: &[u8] = b"contract:code:";
 const MAX_CONTRACT_SIZE: usize = 24 * 1024;
@@ -365,13 +365,13 @@ mod tests {
     use crate::gas::{self, GasMeter};
     use ed25519_dalek::SigningKey;
     use primitive_types::U256;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use vage_crypto::hash::sha256;
     use vage_state::StateDB;
     use vage_storage::{Schema, StorageEngine};
     use vage_types::{Account, Address, Transaction};
-    use std::path::PathBuf;
-    use std::sync::Arc;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_db_path(name: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -414,7 +414,8 @@ mod tests {
     ) -> Transaction {
         let from = Address::from_public_key(&from_key.verifying_key().to_bytes());
         let mut tx = Transaction::new_contract_call(from, to, U256::from(value), nonce, data);
-        tx.sign(from_key).expect("transaction signing should succeed");
+        tx.sign(from_key)
+            .expect("transaction signing should succeed");
         tx
     }
 
@@ -426,7 +427,8 @@ mod tests {
     ) -> Transaction {
         let from = Address::from_public_key(&from_key.verifying_key().to_bytes());
         let mut tx = Transaction::new_contract_deploy(from, U256::from(value), nonce, code);
-        tx.sign(from_key).expect("transaction signing should succeed");
+        tx.sign(from_key)
+            .expect("transaction signing should succeed");
         tx
     }
 
@@ -452,21 +454,35 @@ mod tests {
         let runtime = Runtime::new();
         let sender_key = signing_key(1);
         let sender = Address::from_public_key(&sender_key.verifying_key().to_bytes());
-        state.update_account(&sender, &funded_account(sender, 1_000_000)).expect("sender update should succeed");
+        state
+            .update_account(&sender, &funded_account(sender, 1_000_000))
+            .expect("sender update should succeed");
 
         let code = vec![1u8, 2, 3, 4];
         let code_hash = sha256(&code);
-        runtime.store_contract(&state, code_hash, code.clone()).expect("store contract should succeed");
-        assert_eq!(runtime.load_contract(&state, code_hash).expect("load contract should succeed"), Some(code.clone()));
+        runtime
+            .store_contract(&state, code_hash, code.clone())
+            .expect("store contract should succeed");
+        assert_eq!(
+            runtime
+                .load_contract(&state, code_hash)
+                .expect("load contract should succeed"),
+            Some(code.clone())
+        );
 
         let deploy_tx = signed_contract_deploy(&sender_key, 0, 0, code.clone());
-        let deployed_hash = runtime.deploy_contract(&state, &deploy_tx).expect("deploy contract should succeed");
+        let deployed_hash = runtime
+            .deploy_contract(&state, &deploy_tx)
+            .expect("deploy contract should succeed");
         assert_eq!(deployed_hash, code_hash);
 
         let environment = runtime.environment.lock().unwrap().clone();
         assert_eq!(environment.caller, Some(sender));
         assert_eq!(environment.gas_limit, deploy_tx.gas_limit);
-        assert_eq!(environment.gas_used, gas::calculate_intrinsic_gas(&deploy_tx.data));
+        assert_eq!(
+            environment.gas_used,
+            gas::calculate_intrinsic_gas(&deploy_tx.data)
+        );
 
         cleanup(storage, state, path);
     }
@@ -477,9 +493,16 @@ mod tests {
         let contract = vec![1u8, 2, 3, 4];
         let input = vec![5u8, 6, 7];
 
-        runtime.validate_contract_bytecode(&contract).expect("bytecode validation should succeed");
-        let output = runtime.invoke_method(&contract, &input).expect("invoke method should succeed");
-        assert_eq!(output, sha256(&[contract.clone(), input.clone()].concat()).to_vec());
+        runtime
+            .validate_contract_bytecode(&contract)
+            .expect("bytecode validation should succeed");
+        let output = runtime
+            .invoke_method(&contract, &input)
+            .expect("invoke method should succeed");
+        assert_eq!(
+            output,
+            sha256(&[contract.clone(), input.clone()].concat()).to_vec()
+        );
 
         let mut gas_meter = GasMeter::new(200_000);
         let gas_used = runtime
@@ -492,7 +515,12 @@ mod tests {
                 + (input.len() as u64 * 8)
         );
 
-        let logs = runtime.generate_execution_logs(Address([8u8; 32]), [9u8; 32], output.clone(), gas_used);
+        let logs = runtime.generate_execution_logs(
+            Address([8u8; 32]),
+            [9u8; 32],
+            output.clone(),
+            gas_used,
+        );
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].address, Address([8u8; 32]));
         assert_eq!(logs[0].topics[0], [9u8; 32]);
@@ -505,12 +533,20 @@ mod tests {
 
         let returned = runtime.return_data(vec![4, 3, 2, 1]);
         assert_eq!(returned, vec![4, 3, 2, 1]);
-        assert_eq!(runtime.environment.lock().unwrap().last_return_data, vec![4, 3, 2, 1]);
+        assert_eq!(
+            runtime.environment.lock().unwrap().last_return_data,
+            vec![4, 3, 2, 1]
+        );
 
-        let reverted = runtime.handle_revert("boom").expect("handle revert should succeed");
+        let reverted = runtime
+            .handle_revert("boom")
+            .expect("handle revert should succeed");
         assert_eq!(reverted, b"boom".to_vec());
         assert!(runtime.environment.lock().unwrap().aborted);
-        assert_eq!(runtime.environment.lock().unwrap().revert_reason.as_deref(), Some("boom"));
+        assert_eq!(
+            runtime.environment.lock().unwrap().revert_reason.as_deref(),
+            Some("boom")
+        );
 
         let sandbox_output = runtime
             .sandbox_execution(&contract, &input, &mut GasMeter::new(200_000))
@@ -518,7 +554,9 @@ mod tests {
         assert_eq!(sandbox_output, output);
 
         let mut tight_meter = GasMeter::new(STEP_GAS_COST - 1);
-        assert!(runtime.sandbox_execution(&contract, &input, &mut tight_meter).is_err());
+        assert!(runtime
+            .sandbox_execution(&contract, &input, &mut tight_meter)
+            .is_err());
         assert!(runtime.abort_execution("stop now").is_err());
     }
 
@@ -533,17 +571,33 @@ mod tests {
         let code_hash = sha256(&code);
         let input = vec![9u8, 8, 7, 6];
 
-        state.update_account(&sender, &funded_account(sender, 1_000_000)).expect("sender update should succeed");
-        runtime.store_contract(&state, code_hash, code.clone()).expect("store contract should succeed");
+        state
+            .update_account(&sender, &funded_account(sender, 1_000_000))
+            .expect("sender update should succeed");
+        runtime
+            .store_contract(&state, code_hash, code.clone())
+            .expect("store contract should succeed");
         let mut contract_account = funded_account(contract, 0);
         contract_account.apply_contract_deploy(code_hash);
-        state.update_account(&contract, &contract_account).expect("contract account update should succeed");
+        state
+            .update_account(&contract, &contract_account)
+            .expect("contract account update should succeed");
 
         let tx = signed_contract_call(&sender_key, contract, 0, 0, input.clone());
-        let output = runtime.execute_contract_call(&state, &tx).expect("execute contract call should succeed");
-        assert_eq!(output, sha256(&[code.clone(), input.clone()].concat()).to_vec());
+        let output = runtime
+            .execute_contract_call(&state, &tx)
+            .expect("execute contract call should succeed");
+        assert_eq!(
+            output,
+            sha256(&[code.clone(), input.clone()].concat()).to_vec()
+        );
         let storage_key = sha256(&input);
-        assert_eq!(state.get_storage(&contract, storage_key).expect("storage read should succeed"), Some(sha256(&output)));
+        assert_eq!(
+            state
+                .get_storage(&contract, storage_key)
+                .expect("storage read should succeed"),
+            Some(sha256(&output))
+        );
 
         let environment = runtime.environment.lock().unwrap().clone();
         assert_eq!(environment.contract_address, Some(contract));
@@ -551,7 +605,9 @@ mod tests {
         assert_eq!(environment.gas_limit, tx.gas_limit);
         assert!(!environment.emitted_logs.is_empty());
 
-        let gas_used = runtime.execute_transaction(&state, &tx).expect("execute transaction should succeed");
+        let gas_used = runtime
+            .execute_transaction(&state, &tx)
+            .expect("execute transaction should succeed");
         assert_eq!(gas_used, gas::calculate_intrinsic_gas(&tx.data));
 
         cleanup(storage, state, path);
@@ -564,14 +620,22 @@ mod tests {
         let sender_key = signing_key(3);
         let sender = Address::from_public_key(&sender_key.verifying_key().to_bytes());
         let contract = Address([13u8; 32]);
-        state.update_account(&sender, &funded_account(sender, 500_000)).expect("sender update should succeed");
-        state.update_account(&contract, &funded_account(contract, 0)).expect("contract placeholder update should succeed");
+        state
+            .update_account(&sender, &funded_account(sender, 500_000))
+            .expect("sender update should succeed");
+        state
+            .update_account(&contract, &funded_account(contract, 0))
+            .expect("contract placeholder update should succeed");
 
         assert!(runtime.validate_contract_bytecode(&[]).is_err());
         assert!(runtime.validate_contract_bytecode(&vec![0u8; 8]).is_err());
-    runtime.validate_contract_bytecode(&[0x01]).expect("single-byte bytecode should be valid");
+        runtime
+            .validate_contract_bytecode(&[0x01])
+            .expect("single-byte bytecode should be valid");
         assert!(runtime.invoke_method(&[], &[1u8]).is_err());
-        assert!(runtime.detect_infinite_execution_loops(&vec![1u8; 10_001], &[]).is_err());
+        assert!(runtime
+            .detect_infinite_execution_loops(&vec![1u8; 10_001], &[])
+            .is_err());
 
         let bad_call = signed_contract_call(&sender_key, contract, 0, 0, vec![1u8; 5_000]);
         assert!(runtime.execute_contract_call(&state, &bad_call).is_err());
@@ -588,24 +652,38 @@ mod tests {
         let contract = Address([14u8; 32]);
 
         let missing_sender_deploy = signed_contract_deploy(&sender_key, 0, 0, vec![1u8]);
-        assert!(runtime.execute_transaction(&state, &missing_sender_deploy).is_err());
+        assert!(runtime
+            .execute_transaction(&state, &missing_sender_deploy)
+            .is_err());
 
-        state.update_account(&sender, &funded_account(sender, 500_000)).expect("sender update should succeed");
+        state
+            .update_account(&sender, &funded_account(sender, 500_000))
+            .expect("sender update should succeed");
         let missing_contract_call = signed_contract_call(&sender_key, contract, 0, 0, vec![1u8]);
-        assert!(runtime.execute_transaction(&state, &missing_contract_call).is_err());
+        assert!(runtime
+            .execute_transaction(&state, &missing_contract_call)
+            .is_err());
 
         let code = vec![1u8; 64];
         let code_hash = sha256(&code);
-        runtime.store_contract(&state, code_hash, code.clone()).expect("store contract should succeed");
+        runtime
+            .store_contract(&state, code_hash, code.clone())
+            .expect("store contract should succeed");
         let mut contract_account = funded_account(contract, 0);
         contract_account.apply_contract_deploy(code_hash);
-        state.update_account(&contract, &contract_account).expect("contract account update should succeed");
+        state
+            .update_account(&contract, &contract_account)
+            .expect("contract account update should succeed");
 
         let oversized_call = signed_contract_call(&sender_key, contract, 0, 0, vec![2u8; 4_097]);
-        assert!(runtime.execute_contract_call(&state, &oversized_call).is_err());
+        assert!(runtime
+            .execute_contract_call(&state, &oversized_call)
+            .is_err());
 
         let mut low_step_gas = GasMeter::new(STEP_GAS_COST.saturating_sub(1));
-        assert!(runtime.sandbox_execution(&code, &[1u8; 32], &mut low_step_gas).is_err());
+        assert!(runtime
+            .sandbox_execution(&code, &[1u8; 32], &mut low_step_gas)
+            .is_err());
 
         cleanup(storage, state, path);
     }

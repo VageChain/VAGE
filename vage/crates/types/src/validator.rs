@@ -176,7 +176,8 @@ mod tests {
 
     #[test]
     fn slash_and_reward_adjust_stake() {
-        let mut validator = Validator::new(Address([7u8; 32]), [8u8; 32], unit() * U256::from(5u64));
+        let mut validator =
+            Validator::new(Address([7u8; 32]), [8u8; 32], unit() * U256::from(5u64));
 
         validator.reward(unit());
         assert_eq!(validator.stake, unit() * U256::from(6u64));

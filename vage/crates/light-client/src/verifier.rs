@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
+use tracing::{debug, warn};
 use vage_block::BlockHeader;
 use vage_crypto::ed25519;
 use vage_types::{Address, Hash, Validator};
-use tracing::{warn, debug};
 
 /// A specialized verifier for the VageChain light client to ensure headers are cryptographically secure.
 pub struct HeaderVerifier;
@@ -11,17 +11,26 @@ impl HeaderVerifier {
     /// Verify that a candidate header properly extends a known parent.
     pub fn verify_linkage(header: &BlockHeader, parent: &BlockHeader) -> Result<()> {
         if header.height != parent.height + 1 {
-            bail!("Height sequence violation: expected {}, got {}", parent.height + 1, header.height);
+            bail!(
+                "Height sequence violation: expected {}, got {}",
+                parent.height + 1,
+                header.height
+            );
         }
 
         if !header.verify_parent(parent.hash()) {
-            bail!("Parent-child link corruption at height {}: hash mismatch", header.height);
+            bail!(
+                "Parent-child link corruption at height {}: hash mismatch",
+                header.height
+            );
         }
 
         if !header.verify_timestamp(parent.timestamp) {
             bail!(
                 "Timestamp violation at height {}: current={}, previous={}",
-                header.height, header.timestamp, parent.timestamp
+                header.height,
+                header.timestamp,
+                parent.timestamp
             );
         }
 
@@ -29,8 +38,12 @@ impl HeaderVerifier {
     }
 
     /// Verify the canonical proposer's signature on the header.
-    pub fn verify_proposer_signature(header: &BlockHeader, public_key_bytes: &[u8; 32]) -> Result<bool> {
-        header.verify_signature(public_key_bytes)
+    pub fn verify_proposer_signature(
+        header: &BlockHeader,
+        public_key_bytes: &[u8; 32],
+    ) -> Result<bool> {
+        header
+            .verify_signature(public_key_bytes)
             .map_err(|e| anyhow::anyhow!("Proposer signature verification failed: {:?}", e))
     }
 
@@ -49,19 +62,22 @@ impl HeaderVerifier {
         }
 
         let mut verified_voting_power = 0u64;
-        let validator_map: std::collections::HashMap<Address, &Validator> = validator_set
-            .iter()
-            .map(|v| (v.address, v))
-            .collect();
+        let validator_map: std::collections::HashMap<Address, &Validator> =
+            validator_set.iter().map(|v| (v.address, v)).collect();
 
         // 2. Cryptographically verify each signature and accumulate voting power.
         for (address, sig_bytes) in signatures {
             if let Some(validator) = validator_map.get(address) {
                 // Verify the individual signature using the validator's registered public key.
                 if ed25519::verify(&validator.pubkey, &header_hash, sig_bytes) {
-                    verified_voting_power = verified_voting_power.saturating_add(validator.voting_power);
+                    verified_voting_power =
+                        verified_voting_power.saturating_add(validator.voting_power);
                 } else {
-                    warn!("BFT signature from validator {} is invalid for hash 0x{}", address, hex::encode(header_hash));
+                    warn!(
+                        "BFT signature from validator {} is invalid for hash 0x{}",
+                        address,
+                        hex::encode(header_hash)
+                    );
                 }
             } else {
                 debug!("Received BFT signature from unknown validator: {}", address);
@@ -78,7 +94,12 @@ impl HeaderVerifier {
             );
         }
 
-        debug!("Cryptographic quorum reached: power={}/{} for header 0x{}", verified_voting_power, total_voting_power, hex::encode(header_hash));
+        debug!(
+            "Cryptographic quorum reached: power={}/{} for header 0x{}",
+            verified_voting_power,
+            total_voting_power,
+            hex::encode(header_hash)
+        );
         Ok(true)
     }
 
@@ -104,8 +125,12 @@ impl HeaderVerifier {
         verification_key: &Vec<u8>,
     ) -> Result<bool> {
         // LC Step 2 â€” retrieve the ZK proof from the block header.
-        let proof_bytes = header.zk_proof.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Block header at height {} is missing a ZK validity proof", header.height))?;
+        let proof_bytes = header.zk_proof.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Block header at height {} is missing a ZK validity proof",
+                header.height
+            )
+        })?;
 
         // Bind the proof to the header contents without the proof payload
         // itself to avoid a recursive self-hash dependency.
@@ -121,7 +146,10 @@ impl HeaderVerifier {
         //     â†’ polynomial constraints â†’ final validity).
         let verifier = vage_zk::Sp1Verifier::new(verification_key.clone());
         if !verifier.verify(proof_bytes, &public_inputs)? {
-            bail!("ZK transition proof verification failed for block 0x{}", hex::encode(public_inputs));
+            bail!(
+                "ZK transition proof verification failed for block 0x{}",
+                hex::encode(public_inputs)
+            );
         }
 
         Ok(true)
@@ -148,15 +176,21 @@ impl HeaderVerifier {
         zk_verification_key: &Vec<u8>,
     ) -> Result<()> {
         Self::verify_linkage(header, parent)?;
-        
+
         if !Self::verify_proposer_signature(header, proposer_public_key)? {
-             bail!("Invalid proposer signature for header at height {}", header.height);
+            bail!(
+                "Invalid proposer signature for header at height {}",
+                header.height
+            );
         }
 
         if !Self::confirm_state_transition_validity(header, zk_verification_key)? {
-            bail!("Invalid ZK state transition proof for header at height {}", header.height);
+            bail!(
+                "Invalid ZK state transition proof for header at height {}",
+                header.height
+            );
         }
-        
+
         Ok(())
     }
 }

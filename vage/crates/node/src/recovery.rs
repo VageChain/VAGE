@@ -1,8 +1,8 @@
 use crate::node::Node;
 use anyhow::{bail, Result};
-use vage_block::Block;
 use std::path::Path;
 use tracing::{error, info, warn};
+use vage_block::Block;
 
 pub struct Recovery;
 
@@ -86,10 +86,7 @@ impl Recovery {
             bail!("Snapshot file not found: {:?}", snapshot_path.as_ref());
         }
 
-        vage_storage::StorageEngine::restore_from_snapshot(
-            snapshot_path,
-            storage_path.as_ref(),
-        )?;
+        vage_storage::StorageEngine::restore_from_snapshot(snapshot_path, storage_path.as_ref())?;
         info!("Storage successfully restored from snapshot.");
         Ok(())
     }

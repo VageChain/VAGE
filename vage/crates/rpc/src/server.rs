@@ -86,7 +86,10 @@ impl RpcServer {
         });
 
         if let Some(tls) = &self.config.tls {
-            info!("Starting VageChain SECURE (HTTPS) RPC server on {}...", addr);
+            info!(
+                "Starting VageChain SECURE (HTTPS) RPC server on {}...",
+                addr
+            );
             let rustls_config = RustlsConfig::from_pem_file(&tls.cert_path, &tls.key_path).await?;
             axum_server::bind_rustls(addr, rustls_config)
                 .handle(handle)
@@ -110,7 +113,6 @@ impl RpcServer {
             // JSON-RPC Endpoints
             // -----------------------------------------------------------------
             .route("/rpc", post(Self::handle_json_rpc))
-            
             // -----------------------------------------------------------------
             // REST Endpoints
             // -----------------------------------------------------------------
@@ -118,7 +120,6 @@ impl RpcServer {
             .route("/metrics", get(|| async { metrics::render_metrics() }))
             .route("/status", get(Self::handle_status_rest))
             .route("/blocks/:height", get(Self::handle_block_rest))
-            
             // -----------------------------------------------------------------
             // Shared Middleware Stack
             // -----------------------------------------------------------------
@@ -129,7 +130,6 @@ impl RpcServer {
             .layer(middleware::from_fn(ddos_protection_middleware))
             .layer(middleware::from_fn(timeout_middleware))
             .layer(TraceLayer::new_for_http())
-            
             .with_state(self.context.clone())
     }
 
@@ -144,16 +144,21 @@ impl RpcServer {
         let request: JsonRpcRequest = match serde_json::from_value(raw_request) {
             Ok(req) => req,
             Err(_) => {
-                return Json(serde_json::to_value(
-                    JsonRpcResponse::error(Value::Null, JsonRpcError::parse_error())
-                ).expect("JsonRpcResponse error is always serializable"));
+                return Json(
+                    serde_json::to_value(JsonRpcResponse::error(
+                        Value::Null,
+                        JsonRpcError::parse_error(),
+                    ))
+                    .expect("JsonRpcResponse error is always serializable"),
+                );
             }
         };
 
         if let Err(e) = request.validate() {
-            return Json(serde_json::to_value(
-                JsonRpcResponse::error(request.id, e)
-            ).expect("JsonRpcResponse error is always serializable"));
+            return Json(
+                serde_json::to_value(JsonRpcResponse::error(request.id, e))
+                    .expect("JsonRpcResponse error is always serializable"),
+            );
         }
 
         let method_name = request.method.clone();
@@ -161,7 +166,7 @@ impl RpcServer {
 
         // Core Method Dispatcher
         let result = Self::dispatch_rpc_method(&context, request.method, request.params).await;
-        
+
         let response = match result {
             Ok(val) => {
                 metrics::record_latency(&method_name, start_time);
@@ -174,8 +179,10 @@ impl RpcServer {
             }
         };
 
-        Json(serde_json::to_value(response)
-            .expect("JsonRpcResponse with standard types should always serialize successfully"))
+        Json(
+            serde_json::to_value(response)
+                .expect("JsonRpcResponse with standard types should always serialize successfully"),
+        )
     }
 
     /// Dispatches JSON-RPC calls to specialized module-level handlers.
@@ -191,8 +198,12 @@ impl RpcServer {
                 "eth_networkId" => return Ok(json!("2018131581")),
                 "eth_gasPrice" => return Ok(json!("0x1")), // 1 wei minimum
                 "eth_blockNumber" => {
-                    let height = context.storage.latest_block_height()
-                        .map_err(|e| crate::error::RpcError::InternalError(format!("failed to fetch block height: {}", e)))?;
+                    let height = context.storage.latest_block_height().map_err(|e| {
+                        crate::error::RpcError::InternalError(format!(
+                            "failed to fetch block height: {}",
+                            e
+                        ))
+                    })?;
                     return Ok(json!(format!("0x{:x}", height)));
                 }
                 "eth_getBalance" => "vage_getBalance".to_string(),
@@ -219,7 +230,10 @@ impl RpcServer {
             blocks::handle_block_method(&method_name, params, context).await
         } else if method_name.starts_with("vage_send") || method_name.contains("Transaction") {
             tx::handle_tx_method(&method_name, params, context).await
-        } else if method_name == "vage_getBalance" || method_name.contains("Storage") || method_name.contains("Proof") {
+        } else if method_name == "vage_getBalance"
+            || method_name.contains("Storage")
+            || method_name.contains("Proof")
+        {
             state::handle_state_method(&method_name, params, context).await
         } else {
             network::handle_network_method(&method_name, params, context).await
@@ -241,7 +255,9 @@ impl RpcServer {
         State(context): State<Arc<RpcContext>>,
     ) -> Json<Value> {
         // Directly resolve using the RPC handler logic
-        match blocks::handle_block_method("vage_getBlockByNumber", Some(json!([height])), &context).await {
+        match blocks::handle_block_method("vage_getBlockByNumber", Some(json!([height])), &context)
+            .await
+        {
             Ok(val) => Json(val),
             Err(_) => Json(json!({"error": "block not found"})),
         }

@@ -2,13 +2,13 @@ use crate::hotstuff::pacemaker::{NewViewMessage, Pacemaker};
 use crate::hotstuff::vote::QuorumCertificate;
 use crate::pos::validator_set::ValidatorSet;
 use anyhow::{anyhow, bail, Result};
-use vage_block::Block;
-use vage_storage::StorageEngine;
-use vage_types::{Address, Validator};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tracing::{info, warn};
+use vage_block::Block;
+use vage_storage::StorageEngine;
+use vage_types::{Address, Validator};
 
 // â”€â”€ storage key constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -87,8 +87,8 @@ impl Default for ConsensusState {
 // â”€â”€ items 5-6: persist + store in redb â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub fn persist_consensus_state(storage: &StorageEngine, state: &ConsensusState) -> Result<()> {
-    let snapshot = bincode::serialize(state)
-        .map_err(|e| anyhow!("consensus state serialize: {}", e))?;
+    let snapshot =
+        bincode::serialize(state).map_err(|e| anyhow!("consensus state serialize: {}", e))?;
 
     // Store snapshot
     storage.state_put(STATE_KEY.to_vec(), snapshot)?;
@@ -329,10 +329,7 @@ pub fn exit_safe_recovery_mode(state: &mut ConsensusState, storage: &StorageEngi
 
 // â”€â”€ item 16: broadcast new-view message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-pub fn build_new_view_message(
-    pacemaker: &Pacemaker,
-    validator_count: usize,
-) -> NewViewMessage {
+pub fn build_new_view_message(pacemaker: &Pacemaker, validator_count: usize) -> NewViewMessage {
     pacemaker.broadcast_new_view(validator_count)
 }
 
@@ -417,8 +414,8 @@ pub fn checkpoint_finalized_block(
 ) -> Result<()> {
     let checkpoint = Checkpoint::from_block(block, view, validator_set_hash);
     let key = checkpoint_key(block.height());
-    let bytes = bincode::serialize(&checkpoint)
-        .map_err(|e| anyhow!("checkpoint serialize: {}", e))?;
+    let bytes =
+        bincode::serialize(&checkpoint).map_err(|e| anyhow!("checkpoint serialize: {}", e))?;
     storage.state_put(key, bytes)?;
     info!(
         "checkpointed finalized block at height {} hash {:?}",
@@ -432,8 +429,8 @@ pub fn load_checkpoint(storage: &StorageEngine, height: u64) -> Result<Option<Ch
     let Some(bytes) = storage.state_get(checkpoint_key(height))? else {
         return Ok(None);
     };
-    let cp: Checkpoint = bincode::deserialize(&bytes)
-        .map_err(|e| anyhow!("checkpoint deserialize: {}", e))?;
+    let cp: Checkpoint =
+        bincode::deserialize(&bytes).map_err(|e| anyhow!("checkpoint deserialize: {}", e))?;
     Ok(Some(cp))
 }
 
@@ -455,8 +452,8 @@ fn checkpoint_key(height: u64) -> Vec<u8> {
 // â”€â”€ item 20: audit consensus state integrity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn compute_state_integrity(state: &ConsensusState) -> Result<[u8; 32]> {
-    let bytes = bincode::serialize(state)
-        .map_err(|e| anyhow!("state integrity serialize: {}", e))?;
+    let bytes =
+        bincode::serialize(state).map_err(|e| anyhow!("state integrity serialize: {}", e))?;
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
     Ok(hasher.finalize().into())
@@ -495,7 +492,10 @@ pub fn audit_consensus_state_integrity(
     state: &ConsensusState,
 ) -> Result<()> {
     verify_state_integrity(storage, state)?;
-    info!("consensus state integrity audit passed at view {}", state.current_view);
+    info!(
+        "consensus state integrity audit passed at view {}",
+        state.current_view
+    );
     Ok(())
 }
 
@@ -508,7 +508,10 @@ pub struct ConsensusStateManager {
 
 impl ConsensusStateManager {
     pub fn new(storage: Arc<StorageEngine>) -> Self {
-        Self { state: ConsensusState::new(), storage }
+        Self {
+            state: ConsensusState::new(),
+            storage,
+        }
     }
 
     /// item 7: load from redb on startup; falls back to fresh state.
@@ -547,8 +550,7 @@ impl ConsensusStateManager {
     }
 
     pub fn update_validator_set_hash(&mut self, validators: &[Validator]) -> Result<()> {
-        self.state.validator_set_hash =
-            ConsensusState::compute_validator_set_hash(validators);
+        self.state.validator_set_hash = ConsensusState::compute_validator_set_hash(validators);
         self.persist()
     }
 
@@ -613,13 +615,13 @@ mod tests {
     use super::*;
     use crate::hotstuff::pacemaker::Pacemaker;
     use crate::hotstuff::vote::QuorumCertificate;
-    use vage_block::{Block, BlockBody, BlockHeader};
-    use vage_storage::StorageEngine;
-    use vage_types::{Address, Validator};
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use vage_block::{Block, BlockBody, BlockHeader};
+    use vage_storage::StorageEngine;
+    use vage_types::{Address, Validator};
 
     fn unique_db(name: &str) -> (PathBuf, Arc<StorageEngine>) {
         let ts = SystemTime::now()
@@ -681,7 +683,9 @@ mod tests {
     #[test]
     fn restore_locked_block_from_storage() {
         let (path, storage) = unique_db("locked");
-        storage.state_put(LOCKED_BLOCK_KEY.to_vec(), [42u8; 32].to_vec()).unwrap();
+        storage
+            .state_put(LOCKED_BLOCK_KEY.to_vec(), [42u8; 32].to_vec())
+            .unwrap();
         let lock = restore_locked_block(&storage).unwrap().unwrap();
         assert_eq!(lock, [42u8; 32]);
 
@@ -698,7 +702,9 @@ mod tests {
             signatures: vec![],
             validators: vec![],
         };
-        storage.state_put(HIGHEST_QC_KEY.to_vec(), qc.encode()).unwrap();
+        storage
+            .state_put(HIGHEST_QC_KEY.to_vec(), qc.encode())
+            .unwrap();
         let restored = restore_highest_qc(&storage).unwrap().unwrap();
         assert_eq!(restored.block_hash, [9u8; 32]);
         assert_eq!(restored.view, 3);
@@ -741,7 +747,9 @@ mod tests {
         persist_consensus_state(&storage, &state).unwrap();
 
         // Tamper with stored integrity hash
-        storage.state_put(INTEGRITY_KEY.to_vec(), vec![0u8; 32]).unwrap();
+        storage
+            .state_put(INTEGRITY_KEY.to_vec(), vec![0u8; 32])
+            .unwrap();
 
         let check = detect_inconsistent_state(&storage, &state).unwrap();
         assert_eq!(check, ConsistencyCheck::IntegrityHashMismatch);

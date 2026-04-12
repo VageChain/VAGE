@@ -1,0 +1,13 @@
+# Markdown lint ignore patterns
+
+# Build and generated files
+node_modules/
+target/
+build/
+dist/
+
+# External documentation
+external/
+
+# Changelog and release notes
+CHANGELOG.md

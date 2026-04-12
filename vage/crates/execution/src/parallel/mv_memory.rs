@@ -1,4 +1,4 @@
-﻿/// Multi-version memory (MVMemory) for optimistic concurrency control (OCC).
+/// Multi-version memory (MVMemory) for optimistic concurrency control (OCC).
 ///
 /// Maintains a per-key, per-transaction versioned store so that transactions can
 /// execute speculatively in parallel, validate their reads after execution, and
@@ -15,16 +15,15 @@
 /// 8  `promote_to_committed` — promote valid versions to committed status
 /// 9  `gc` — garbage collect obsolete versions below a watermark
 /// 10 Versioned read API: `read_at_version`, `read_latest_committed`, `read_for_snapshot`
-
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tracing::{debug, trace};
 
-// 
+//
 // Common identifiers
-// 
+//
 
 /// Monotonically increasing snapshot identifier (used by the legacy API and
 /// by `VersionedMemory`).
@@ -32,8 +31,12 @@ use tracing::{debug, trace};
 pub struct SnapshotId(pub u64);
 
 impl SnapshotId {
-    pub fn new(id: u64) -> Self { Self(id) }
-    pub fn next(self) -> Self { Self(self.0 + 1) }
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
+    pub fn next(self) -> Self {
+        Self(self.0 + 1)
+    }
 }
 
 /// Identifies a specific execution of a transaction: `(tx_index, incarnation)`.
@@ -49,13 +52,23 @@ pub struct TxVersion {
 }
 
 impl TxVersion {
-    pub fn new(tx_index: usize) -> Self { Self { tx_index, incarnation: 0 } }
-    pub fn retry(&self) -> Self { Self { tx_index: self.tx_index, incarnation: self.incarnation + 1 } }
+    pub fn new(tx_index: usize) -> Self {
+        Self {
+            tx_index,
+            incarnation: 0,
+        }
+    }
+    pub fn retry(&self) -> Self {
+        Self {
+            tx_index: self.tx_index,
+            incarnation: self.incarnation + 1,
+        }
+    }
 }
 
-// 
+//
 // item 1: MVMemory struct { key  versions }
-// 
+//
 
 /// Status of an individual version entry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,7 +94,11 @@ pub struct Version {
 
 impl Version {
     pub fn speculative(tx_version: TxVersion, value: Vec<u8>) -> Self {
-        Self { tx_version, value, status: VersionStatus::Speculative }
+        Self {
+            tx_version,
+            value,
+            status: VersionStatus::Speculative,
+        }
     }
 }
 
@@ -94,7 +111,9 @@ pub struct MVMemory {
     /// key  versions sorted ascending by `TxVersion`.
     inner: Arc<RwLock<MVMemoryInner>>,
     /// Per-transaction speculative state (item 4).
-    speculative: Arc<RwLock<HashMap<TxVersion, SpeculativeState>>>,    #[allow(dead_code)]    config: MVMemoryConfig,
+    speculative: Arc<RwLock<HashMap<TxVersion, SpeculativeState>>>,
+    #[allow(dead_code)]
+    config: MVMemoryConfig,
 }
 
 /// The inner data protected by `RwLock`.
@@ -113,12 +132,14 @@ pub struct MVMemoryConfig {
 }
 
 impl Default for MVMemoryConfig {
-    fn default() -> Self { Self { history_depth: 64 } }
+    fn default() -> Self {
+        Self { history_depth: 64 }
+    }
 }
 
-// 
+//
 // item 4: SpeculativeState — per-transaction tracking
-// 
+//
 
 /// What one transaction has speculatively read and written.
 #[derive(Clone, Debug, Default)]
@@ -138,9 +159,9 @@ pub struct ReadRecord {
     pub observed_version: Option<TxVersion>,
 }
 
-// 
+//
 // MVMemory implementation
-// 
+//
 
 impl MVMemory {
     pub fn new(config: MVMemoryConfig) -> Self {
@@ -154,7 +175,7 @@ impl MVMemory {
         }
     }
 
-    //  item 2: store versioned writes per transaction 
+    //  item 2: store versioned writes per transaction
 
     /// Records a speculative write for `tx_version` on `key`.
     ///
@@ -171,8 +192,10 @@ impl MVMemory {
             let entry = inner.versions.entry(key.clone()).or_insert_with(Vec::new);
 
             // Remove any prior incarnation from the same tx_index (idempotent re-execution).
-            entry.retain(|v| v.tx_version.tx_index != tx_version.tx_index
-                || v.tx_version.incarnation != tx_version.incarnation);
+            entry.retain(|v| {
+                v.tx_version.tx_index != tx_version.tx_index
+                    || v.tx_version.incarnation != tx_version.incarnation
+            });
 
             entry.push(Version::speculative(tx_version, value));
             // Keep sorted ascending so binary-search reads work.
@@ -180,7 +203,10 @@ impl MVMemory {
         }
 
         {
-            let mut spec = self.speculative.write().map_err(|_| anyhow!("lock poisoned"))?;
+            let mut spec = self
+                .speculative
+                .write()
+                .map_err(|_| anyhow!("lock poisoned"))?;
             spec.entry(tx_version)
                 .or_insert_with(SpeculativeState::default)
                 .write_set
@@ -191,7 +217,7 @@ impl MVMemory {
         Ok(())
     }
 
-    //  item 3: parallel reads from latest committed version 
+    //  item 3: parallel reads from latest committed version
 
     /// Returns the latest **committed** value for `key` visible before `tx_index`.
     ///
@@ -204,14 +230,13 @@ impl MVMemory {
                 .iter()
                 .rev()
                 .find(|v| {
-                    v.status == VersionStatus::Committed
-                        && v.tx_version.tx_index < before_tx_index
+                    v.status == VersionStatus::Committed && v.tx_version.tx_index < before_tx_index
                 })
                 .map(|v| v.value.clone())
         })
     }
 
-    //  item 10: versioned read API 
+    //  item 10: versioned read API
 
     /// Returns the best visible value for `key` as seen by `tx_version`:
     ///
@@ -242,8 +267,13 @@ impl MVMemory {
 
         // Record in read set (item 4).
         {
-            let mut spec = self.speculative.write().map_err(|_| anyhow!("lock poisoned"))?;
-            let state = spec.entry(tx_version).or_insert_with(SpeculativeState::default);
+            let mut spec = self
+                .speculative
+                .write()
+                .map_err(|_| anyhow!("lock poisoned"))?;
+            let state = spec
+                .entry(tx_version)
+                .or_insert_with(SpeculativeState::default);
             state.read_set.push(ReadRecord {
                 key: key.to_vec(),
                 observed_version: observed.as_ref().map(|(tv, _)| *tv),
@@ -253,13 +283,16 @@ impl MVMemory {
         Ok(observed.map(|(_, v)| v))
     }
 
-    //  item 5: validate reads after execution 
+    //  item 5: validate reads after execution
 
     /// Re-validates the read set of `tx_version` against the current committed
     /// store.  Returns `Ok(true)` if all reads are still consistent, `Ok(false)`
     /// if any read would now return a different value ( transaction must abort).
     pub fn validate_reads(&self, tx_version: TxVersion) -> Result<bool> {
-        let spec = self.speculative.read().map_err(|_| anyhow!("lock poisoned"))?;
+        let spec = self
+            .speculative
+            .read()
+            .map_err(|_| anyhow!("lock poisoned"))?;
         let state = match spec.get(&tx_version) {
             Some(s) => s,
             None => return Ok(true), // nothing read  trivially valid
@@ -288,7 +321,7 @@ impl MVMemory {
         Ok(true)
     }
 
-    //  item 6: detect write conflicts 
+    //  item 6: detect write conflicts
 
     /// Returns the set of `TxVersion`s whose speculative write set overlaps
     /// with `keys_written_by_later_tx`.
@@ -300,7 +333,10 @@ impl MVMemory {
         tx_version: TxVersion,
         committed_keys: &[Vec<u8>],
     ) -> Result<Vec<TxVersion>> {
-        let spec = self.speculative.read().map_err(|_| anyhow!("lock poisoned"))?;
+        let spec = self
+            .speculative
+            .read()
+            .map_err(|_| anyhow!("lock poisoned"))?;
         let mut conflicted = Vec::new();
 
         for (other_ver, state) in spec.iter() {
@@ -322,7 +358,7 @@ impl MVMemory {
         Ok(conflicted)
     }
 
-    //  item 7: discard invalid speculative versions 
+    //  item 7: discard invalid speculative versions
 
     /// Marks all speculative versions written by `tx_version` as `Aborted` and
     /// removes them from the store, clearing the associated `SpeculativeState`.
@@ -336,14 +372,17 @@ impl MVMemory {
             }
         }
         {
-            let mut spec = self.speculative.write().map_err(|_| anyhow!("lock poisoned"))?;
+            let mut spec = self
+                .speculative
+                .write()
+                .map_err(|_| anyhow!("lock poisoned"))?;
             spec.remove(&tx_version);
         }
         debug!(?tx_version, "speculative versions discarded");
         Ok(())
     }
 
-    //  item 8: promote valid versions to committed 
+    //  item 8: promote valid versions to committed
 
     /// Transitions every `Speculative` version written by `tx_version` to
     /// `Committed` status, making them visible to subsequent transactions.
@@ -368,11 +407,15 @@ impl MVMemory {
                 *wm = tx_version.tx_index;
             }
         }
-        debug!(?tx_version, keys = promoted.len(), "versions promoted to committed");
+        debug!(
+            ?tx_version,
+            keys = promoted.len(),
+            "versions promoted to committed"
+        );
         Ok(promoted)
     }
 
-    //  item 9: garbage collect obsolete versions 
+    //  item 9: garbage collect obsolete versions
 
     /// Removes all version entries for transactions with `tx_index < min_tx_index`,
     /// freeing memory for fully-committed blocks.
@@ -391,14 +434,17 @@ impl MVMemory {
             inner.versions.retain(|_, v| !v.is_empty());
         }
         {
-            let mut spec = self.speculative.write().map_err(|_| anyhow!("lock poisoned"))?;
+            let mut spec = self
+                .speculative
+                .write()
+                .map_err(|_| anyhow!("lock poisoned"))?;
             spec.retain(|tv, _| tv.tx_index >= min_tx_index);
         }
         debug!(min_tx_index, removed, "MVMemory GC complete");
         Ok(removed)
     }
 
-    //  Accessors 
+    //  Accessors
 
     /// Returns the current committed watermark (highest committed `tx_index`).
     pub fn committed_watermark(&self) -> Option<usize> {
@@ -412,26 +458,32 @@ impl MVMemory {
 
     /// Returns all keys that have at least one committed version.
     pub fn committed_keys(&self) -> Vec<Vec<u8>> {
-        self.inner.read().ok().map(|g| {
-            g.versions
-                .iter()
-                .filter(|(_, vs)| vs.iter().any(|v| v.status == VersionStatus::Committed))
-                .map(|(k, _)| k.clone())
-                .collect()
-        }).unwrap_or_default()
+        self.inner
+            .read()
+            .ok()
+            .map(|g| {
+                g.versions
+                    .iter()
+                    .filter(|(_, vs)| vs.iter().any(|v| v.status == VersionStatus::Committed))
+                    .map(|(k, _)| k.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Returns all active `TxVersion`s that have speculative writes pending.
     pub fn pending_speculative_versions(&self) -> Vec<TxVersion> {
-        self.speculative.read().ok()
+        self.speculative
+            .read()
+            .ok()
             .map(|g| g.keys().copied().collect())
             .unwrap_or_default()
     }
 }
 
-// 
+//
 // Legacy types — kept for backward-compat with VersionedMemory used by executor
-// 
+//
 
 /// A read-only view of state at a particular snapshot.
 #[derive(Clone, Debug)]
@@ -443,7 +495,10 @@ pub struct Snapshot {
 
 impl Snapshot {
     pub fn new(id: SnapshotId) -> Self {
-        Self { id, versions: Arc::new(HashMap::new()) }
+        Self {
+            id,
+            versions: Arc::new(HashMap::new()),
+        }
     }
 
     pub fn read(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -458,8 +513,14 @@ impl Snapshot {
 
     pub fn write_in_child(&self, id: SnapshotId, key: Vec<u8>, value: Vec<u8>) -> Snapshot {
         let mut new_versions = HashMap::clone(self.versions.as_ref());
-        new_versions.entry(key).or_insert_with(Vec::new).push((id, value));
-        Snapshot { id, versions: Arc::new(new_versions) }
+        new_versions
+            .entry(key)
+            .or_insert_with(Vec::new)
+            .push((id, value));
+        Snapshot {
+            id,
+            versions: Arc::new(new_versions),
+        }
     }
 }
 
@@ -501,9 +562,12 @@ impl VersionedMemory {
         let id = self.current_snapshot_id.next();
         self.current_snapshot_id = id;
 
-        let versions = self.versions.iter()
+        let versions = self
+            .versions
+            .iter()
             .map(|(k, vers)| {
-                let pruned = vers.iter()
+                let pruned = vers
+                    .iter()
                     .filter(|(vid, _)| *vid >= self.config.min_retained_snapshot_id)
                     .cloned()
                     .collect();
@@ -511,13 +575,24 @@ impl VersionedMemory {
             })
             .collect();
 
-        let snapshot = Snapshot { id, versions: Arc::new(versions) };
+        let snapshot = Snapshot {
+            id,
+            versions: Arc::new(versions),
+        };
         self.snapshots.insert(id, snapshot.clone());
         Ok(snapshot)
     }
 
-    pub fn record_write(&mut self, snapshot_id: SnapshotId, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
-        self.versions.entry(key).or_insert_with(Vec::new).push((snapshot_id, value));
+    pub fn record_write(
+        &mut self,
+        snapshot_id: SnapshotId,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<()> {
+        self.versions
+            .entry(key)
+            .or_insert_with(Vec::new)
+            .push((snapshot_id, value));
         Ok(())
     }
 
@@ -538,7 +613,8 @@ impl VersionedMemory {
 
     pub fn read_for_snapshot(&self, snapshot_id: SnapshotId, key: &[u8]) -> Option<Vec<u8>> {
         self.versions.get(key).and_then(|versions| {
-            versions.iter()
+            versions
+                .iter()
                 .filter(|(vid, _)| vid <= &snapshot_id)
                 .last()
                 .map(|(_, val)| val.clone())
@@ -556,24 +632,28 @@ impl VersionedMemory {
         Ok(pruned)
     }
 
-    pub fn current_id(&self) -> SnapshotId { self.current_snapshot_id }
+    pub fn current_id(&self) -> SnapshotId {
+        self.current_snapshot_id
+    }
 
     pub fn all_snapshots(&self) -> Vec<SnapshotId> {
         self.snapshots.keys().copied().collect()
     }
 }
 
-// 
+//
 // Tests
-// 
+//
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn mem() -> MVMemory { MVMemory::new(MVMemoryConfig::default()) }
+    fn mem() -> MVMemory {
+        MVMemory::new(MVMemoryConfig::default())
+    }
 
-    //  item 1 
+    //  item 1
 
     #[test]
     fn mv_memory_starts_empty() {
@@ -582,13 +662,14 @@ mod tests {
         assert_eq!(m.committed_watermark(), None);
     }
 
-    //  item 2 
+    //  item 2
 
     #[test]
     fn record_speculative_write_stores_value() {
         let m = mem();
         let tv = TxVersion::new(0);
-        m.record_speculative_write(tv, b"k".to_vec(), b"v".to_vec()).unwrap();
+        m.record_speculative_write(tv, b"k".to_vec(), b"v".to_vec())
+            .unwrap();
         // Visible to own read.
         let val = m.read_at_version(tv, b"k").unwrap();
         assert_eq!(val, Some(b"v".to_vec()));
@@ -599,19 +680,22 @@ mod tests {
         let m = mem();
         let tv0 = TxVersion::new(3);
         let tv1 = tv0.retry();
-        m.record_speculative_write(tv0, b"k".to_vec(), b"old".to_vec()).unwrap();
-        m.record_speculative_write(tv1, b"k".to_vec(), b"new".to_vec()).unwrap();
+        m.record_speculative_write(tv0, b"k".to_vec(), b"old".to_vec())
+            .unwrap();
+        m.record_speculative_write(tv1, b"k".to_vec(), b"new".to_vec())
+            .unwrap();
         // Both incarnations are stored; each reads its own latest.
         assert_eq!(m.read_at_version(tv1, b"k").unwrap(), Some(b"new".to_vec()));
     }
 
-    //  item 3 
+    //  item 3
 
     #[test]
     fn read_latest_committed_returns_none_when_only_speculative() {
         let m = mem();
         let tv = TxVersion::new(0);
-        m.record_speculative_write(tv, b"x".to_vec(), b"v".to_vec()).unwrap();
+        m.record_speculative_write(tv, b"x".to_vec(), b"v".to_vec())
+            .unwrap();
         // tx_index=1 looks for committed writes from index < 1  none.
         assert_eq!(m.read_latest_committed(b"x", 1), None);
     }
@@ -620,7 +704,8 @@ mod tests {
     fn read_latest_committed_returns_promoted_value() {
         let m = mem();
         let tv0 = TxVersion::new(0);
-        m.record_speculative_write(tv0, b"x".to_vec(), b"v0".to_vec()).unwrap();
+        m.record_speculative_write(tv0, b"x".to_vec(), b"v0".to_vec())
+            .unwrap();
         m.promote_to_committed(tv0).unwrap();
 
         // tx_index=1 can now read tx0's committed write.
@@ -632,13 +717,16 @@ mod tests {
         use std::thread;
         let m = Arc::new(MVMemory::new(MVMemoryConfig::default()));
         let tv = TxVersion::new(0);
-        m.record_speculative_write(tv, b"k".to_vec(), b"v".to_vec()).unwrap();
+        m.record_speculative_write(tv, b"k".to_vec(), b"v".to_vec())
+            .unwrap();
         m.promote_to_committed(tv).unwrap();
 
-        let handles: Vec<_> = (1..8).map(|i| {
-            let m2 = m.clone();
-            thread::spawn(move || m2.read_latest_committed(b"k", i))
-        }).collect();
+        let handles: Vec<_> = (1..8)
+            .map(|i| {
+                let m2 = m.clone();
+                thread::spawn(move || m2.read_latest_committed(b"k", i))
+            })
+            .collect();
 
         for h in handles {
             let val = h.join().unwrap();
@@ -646,14 +734,16 @@ mod tests {
         }
     }
 
-    //  item 4 
+    //  item 4
 
     #[test]
     fn speculative_state_tracks_writes() {
         let m = mem();
         let tv = TxVersion::new(2);
-        m.record_speculative_write(tv, b"a".to_vec(), b"1".to_vec()).unwrap();
-        m.record_speculative_write(tv, b"b".to_vec(), b"2".to_vec()).unwrap();
+        m.record_speculative_write(tv, b"a".to_vec(), b"1".to_vec())
+            .unwrap();
+        m.record_speculative_write(tv, b"b".to_vec(), b"2".to_vec())
+            .unwrap();
         let state = m.speculative_state(tv).unwrap();
         assert_eq!(state.write_set.len(), 2);
     }
@@ -669,7 +759,7 @@ mod tests {
         assert!(state.read_set[0].observed_version.is_none());
     }
 
-    //  item 5 
+    //  item 5
 
     #[test]
     fn validate_reads_passes_when_no_new_commit() {
@@ -677,8 +767,9 @@ mod tests {
         let tv0 = TxVersion::new(0);
         let tv1 = TxVersion::new(1);
         // tx1 reads a key that tx0 wrote speculatively (not yet committed).
-        m.record_speculative_write(tv0, b"x".to_vec(), b"v".to_vec()).unwrap();
-        m.read_at_version(tv1, b"x").unwrap();  // sees None (tx0 not committed).
+        m.record_speculative_write(tv0, b"x".to_vec(), b"v".to_vec())
+            .unwrap();
+        m.read_at_version(tv1, b"x").unwrap(); // sees None (tx0 not committed).
         assert!(m.validate_reads(tv1).unwrap());
     }
 
@@ -690,21 +781,24 @@ mod tests {
         // tx1 reads "x" as absent.
         m.read_at_version(tv1, b"x").unwrap();
         // tx0 commits a write to "x".
-        m.record_speculative_write(tv0, b"x".to_vec(), b"v".to_vec()).unwrap();
+        m.record_speculative_write(tv0, b"x".to_vec(), b"v".to_vec())
+            .unwrap();
         m.promote_to_committed(tv0).unwrap();
         // Now tv1's read set is stale.
         assert!(!m.validate_reads(tv1).unwrap());
     }
 
-    //  item 6 
+    //  item 6
 
     #[test]
     fn detect_write_conflicts_finds_later_writers() {
         let m = mem();
         let tv0 = TxVersion::new(0);
         let tv1 = TxVersion::new(1);
-        m.record_speculative_write(tv0, b"x".to_vec(), b"v0".to_vec()).unwrap();
-        m.record_speculative_write(tv1, b"x".to_vec(), b"v1".to_vec()).unwrap();
+        m.record_speculative_write(tv0, b"x".to_vec(), b"v0".to_vec())
+            .unwrap();
+        m.record_speculative_write(tv1, b"x".to_vec(), b"v1".to_vec())
+            .unwrap();
         let conflicts = m.detect_write_conflicts(tv0, &[b"x".to_vec()]).unwrap();
         assert!(conflicts.contains(&tv1));
     }
@@ -714,37 +808,43 @@ mod tests {
         let m = mem();
         let tv0 = TxVersion::new(0);
         let tv1 = TxVersion::new(1);
-        m.record_speculative_write(tv0, b"x".to_vec(), b"v0".to_vec()).unwrap();
-        m.record_speculative_write(tv1, b"x".to_vec(), b"v1".to_vec()).unwrap();
+        m.record_speculative_write(tv0, b"x".to_vec(), b"v0".to_vec())
+            .unwrap();
+        m.record_speculative_write(tv1, b"x".to_vec(), b"v1".to_vec())
+            .unwrap();
         // tv1 detecting conflicts; tv0 is earlier  not reported.
         let conflicts = m.detect_write_conflicts(tv1, &[b"x".to_vec()]).unwrap();
         assert!(conflicts.is_empty());
     }
 
-    //  item 7 
+    //  item 7
 
     #[test]
     fn discard_speculative_removes_writes_and_state() {
         let m = mem();
         let tv = TxVersion::new(3);
-        m.record_speculative_write(tv, b"y".to_vec(), b"v".to_vec()).unwrap();
+        m.record_speculative_write(tv, b"y".to_vec(), b"v".to_vec())
+            .unwrap();
         m.discard_speculative(tv).unwrap();
         assert!(m.speculative_state(tv).is_none());
         // The key should no longer be visible.
         let inner = m.inner.read().unwrap();
-        let gone = inner.versions.get(b"y".as_slice())
+        let gone = inner
+            .versions
+            .get(b"y".as_slice())
             .map(|vs| vs.is_empty())
             .unwrap_or(true);
         assert!(gone);
     }
 
-    //  item 8 
+    //  item 8
 
     #[test]
     fn promote_to_committed_makes_value_visible() {
         let m = mem();
         let tv = TxVersion::new(0);
-        m.record_speculative_write(tv, b"k".to_vec(), b"val".to_vec()).unwrap();
+        m.record_speculative_write(tv, b"k".to_vec(), b"val".to_vec())
+            .unwrap();
         let keys = m.promote_to_committed(tv).unwrap();
         assert!(keys.contains(&b"k".to_vec()));
         assert_eq!(m.read_latest_committed(b"k", 1), Some(b"val".to_vec()));
@@ -755,20 +855,22 @@ mod tests {
         let m = mem();
         for i in 0..3usize {
             let tv = TxVersion::new(i);
-            m.record_speculative_write(tv, format!("k{}", i).into_bytes(), b"v".to_vec()).unwrap();
+            m.record_speculative_write(tv, format!("k{}", i).into_bytes(), b"v".to_vec())
+                .unwrap();
             m.promote_to_committed(tv).unwrap();
         }
         assert_eq!(m.committed_watermark(), Some(2));
     }
 
-    //  item 9 
+    //  item 9
 
     #[test]
     fn gc_removes_old_versions() {
         let m = mem();
         for i in 0..5usize {
             let tv = TxVersion::new(i);
-            m.record_speculative_write(tv, b"k".to_vec(), format!("v{}", i).into_bytes()).unwrap();
+            m.record_speculative_write(tv, b"k".to_vec(), format!("v{}", i).into_bytes())
+                .unwrap();
             m.promote_to_committed(tv).unwrap();
         }
         let removed = m.gc(3).unwrap();
@@ -781,19 +883,21 @@ mod tests {
     fn gc_does_not_remove_recent_versions() {
         let m = mem();
         let tv = TxVersion::new(10);
-        m.record_speculative_write(tv, b"z".to_vec(), b"v".to_vec()).unwrap();
+        m.record_speculative_write(tv, b"z".to_vec(), b"v".to_vec())
+            .unwrap();
         m.promote_to_committed(tv).unwrap();
         m.gc(5).unwrap();
         assert_eq!(m.read_latest_committed(b"z", 11), Some(b"v".to_vec()));
     }
 
-    //  item 10 
+    //  item 10
 
     #[test]
     fn read_at_version_sees_own_write_before_committed() {
         let m = mem();
         let tv = TxVersion::new(7);
-        m.record_speculative_write(tv, b"q".to_vec(), b"mine".to_vec()).unwrap();
+        m.record_speculative_write(tv, b"q".to_vec(), b"mine".to_vec())
+            .unwrap();
         let val = m.read_at_version(tv, b"q").unwrap();
         assert_eq!(val, Some(b"mine".to_vec()));
     }
@@ -802,7 +906,8 @@ mod tests {
     fn read_at_version_sees_earlier_committed_value() {
         let m = mem();
         let tv0 = TxVersion::new(0);
-        m.record_speculative_write(tv0, b"m".to_vec(), b"base".to_vec()).unwrap();
+        m.record_speculative_write(tv0, b"m".to_vec(), b"base".to_vec())
+            .unwrap();
         m.promote_to_committed(tv0).unwrap();
 
         let tv5 = TxVersion::new(5);
@@ -814,7 +919,8 @@ mod tests {
     fn read_at_version_not_visible_to_earlier_tx() {
         let m = mem();
         let tv5 = TxVersion::new(5);
-        m.record_speculative_write(tv5, b"n".to_vec(), b"late".to_vec()).unwrap();
+        m.record_speculative_write(tv5, b"n".to_vec(), b"late".to_vec())
+            .unwrap();
         m.promote_to_committed(tv5).unwrap();
 
         let tv2 = TxVersion::new(2);
@@ -822,7 +928,7 @@ mod tests {
         assert_eq!(val, None);
     }
 
-    //  Legacy VersionedMemory tests 
+    //  Legacy VersionedMemory tests
 
     #[test]
     fn snapshot_read_write_isolation() {
@@ -836,15 +942,20 @@ mod tests {
     fn versioned_memory_create_and_write() {
         let mut mem = VersionedMemory::new(VersionedMemoryConfig::default());
         let snap = mem.create_snapshot().unwrap();
-        mem.record_write(snap.id, b"key".to_vec(), b"value".to_vec()).unwrap();
-        assert_eq!(mem.read_for_snapshot(snap.id, b"key"), Some(b"value".to_vec()));
+        mem.record_write(snap.id, b"key".to_vec(), b"value".to_vec())
+            .unwrap();
+        assert_eq!(
+            mem.read_for_snapshot(snap.id, b"key"),
+            Some(b"value".to_vec())
+        );
     }
 
     #[test]
     fn versioned_memory_abort_snapshot() {
         let mut mem = VersionedMemory::new(VersionedMemoryConfig::default());
         let snap = mem.create_snapshot().unwrap();
-        mem.record_write(snap.id, b"x".to_vec(), b"v".to_vec()).unwrap();
+        mem.record_write(snap.id, b"x".to_vec(), b"v".to_vec())
+            .unwrap();
         mem.abort_snapshot(snap.id).unwrap();
         assert_eq!(mem.read_for_snapshot(snap.id, b"x"), None);
     }

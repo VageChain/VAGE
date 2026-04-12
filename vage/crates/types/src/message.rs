@@ -141,7 +141,7 @@ fn decompress_payload(payload: &[u8]) -> anyhow::Result<Vec<u8>> {
         return Ok(Vec::new());
     }
 
-    if payload.len() % 2 != 0 {
+    if !payload.len().is_multiple_of(2) {
         anyhow::bail!("invalid compressed payload length");
     }
 
@@ -164,8 +164,7 @@ fn decompress_payload(payload: &[u8]) -> anyhow::Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CanonicalMessage, NetworkMessage, CANONICAL_MESSAGE_VERSION,
-        MAX_CANONICAL_MESSAGE_SIZE,
+        CanonicalMessage, NetworkMessage, CANONICAL_MESSAGE_VERSION, MAX_CANONICAL_MESSAGE_SIZE,
     };
     use crate::{Address, Transaction};
     use primitive_types::U256;
@@ -183,10 +182,16 @@ mod tests {
         assert_eq!(restored.encode(), original.encode());
 
         match (original, restored) {
-            (NetworkMessage::GossipTransaction(expected), NetworkMessage::GossipTransaction(actual)) => {
+            (
+                NetworkMessage::GossipTransaction(expected),
+                NetworkMessage::GossipTransaction(actual),
+            ) => {
                 assert_eq!(actual, expected);
             }
-            (NetworkMessage::GossipProposedBlock(expected), NetworkMessage::GossipProposedBlock(actual)) => {
+            (
+                NetworkMessage::GossipProposedBlock(expected),
+                NetworkMessage::GossipProposedBlock(actual),
+            ) => {
                 assert_eq!(actual, expected);
             }
             (
@@ -210,7 +215,10 @@ mod tests {
                     start_height: expected_start,
                     limit: expected_limit,
                 },
-                NetworkMessage::GetBlockHeaders { start_height, limit },
+                NetworkMessage::GetBlockHeaders {
+                    start_height,
+                    limit,
+                },
             ) => {
                 assert_eq!(start_height, expected_start);
                 assert_eq!(limit, expected_limit);
@@ -225,19 +233,18 @@ mod tests {
                 assert_eq!(actual, expected);
             }
             (expected, actual) => {
-                panic!("restored different variant: expected {:?}, got {:?}", expected, actual);
+                panic!(
+                    "restored different variant: expected {:?}, got {:?}",
+                    expected, actual
+                );
             }
         }
     }
 
     #[test]
     fn canonical_message_round_trips_network_payloads() {
-        let tx = Transaction::new_transfer(
-            Address([1u8; 32]),
-            Address([2u8; 32]),
-            U256::from(10u64),
-            4,
-        );
+        let tx =
+            Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(10u64), 4);
         assert_canonical_round_trip(NetworkMessage::GossipTransaction(tx));
     }
 
@@ -337,12 +344,8 @@ mod tests {
 
     #[test]
     fn canonical_message_round_trips_multiple_network_variants_exactly() {
-        let tx = Transaction::new_transfer(
-            Address([9u8; 32]),
-            Address([8u8; 32]),
-            U256::from(55u64),
-            9,
-        );
+        let tx =
+            Transaction::new_transfer(Address([9u8; 32]), Address([8u8; 32]), U256::from(55u64), 9);
         let cases = vec![
             NetworkMessage::GossipTransaction(tx.clone()),
             NetworkMessage::GossipProposedBlock(vec![7u8; 256]),

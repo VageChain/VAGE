@@ -1,13 +1,13 @@
 use anyhow::{bail, Context, Result};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use vage_types::{Address, BlockHeight, Canonical, Hash, Timestamp};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
+use vage_types::{Address, BlockHeight, Canonical, Hash, Timestamp};
 
 mod serde_sig {
-    use serde::{Deserializer, Serializer};
     use serde::de::Error;
+    use serde::{Deserializer, Serializer};
     pub fn serialize<S>(sig: &Option<[u8; 64]>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -24,7 +24,9 @@ mod serde_sig {
         let opt: Option<Vec<u8>> = serde::Deserialize::deserialize(deserializer)?;
         match opt {
             Some(vec) => {
-                let arr = vec.try_into().map_err(|_| Error::custom("expected 64 bytes"))?;
+                let arr = vec
+                    .try_into()
+                    .map_err(|_| Error::custom("expected 64 bytes"))?;
                 Ok(Some(arr))
             }
             None => Ok(None),
@@ -228,7 +230,9 @@ mod tests {
         assert_eq!(header.parent_hash, [0u8; 32]);
         assert_eq!(header.height, 0);
         assert_eq!(header.timestamp, 1_600_000_000);
-        header.validate_basic().expect("genesis header should validate");
+        header
+            .validate_basic()
+            .expect("genesis header should validate");
     }
 
     #[test]
@@ -242,7 +246,10 @@ mod tests {
 
         header.signature = Some([9u8; 64]);
 
-        assert_eq!(decoded, BlockHeader::decode(&encoded).expect("repeat decode should succeed"));
+        assert_eq!(
+            decoded,
+            BlockHeader::decode(&encoded).expect("repeat decode should succeed")
+        );
         assert_eq!(unsigned_hash, header.hash());
     }
 
@@ -285,7 +292,9 @@ mod tests {
     #[test]
     fn verification_rejects_mismatched_proposer_key() {
         let signing_key = SigningKey::from_bytes(&[12u8; 32]);
-        let other_public_key = SigningKey::from_bytes(&[13u8; 32]).verifying_key().to_bytes();
+        let other_public_key = SigningKey::from_bytes(&[13u8; 32])
+            .verifying_key()
+            .to_bytes();
         let mut header = BlockHeader::new([14u8; 32], 10);
         header.proposer = Address::from_public_key(&signing_key.verifying_key().to_bytes());
         header.sign(&signing_key).expect("signing should succeed");

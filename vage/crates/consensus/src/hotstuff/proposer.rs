@@ -1,11 +1,11 @@
 use crate::hotstuff::vote::QuorumCertificate;
 use anyhow::{bail, Result};
 use ed25519_dalek::SigningKey;
+use std::sync::Arc;
+use std::time::Duration;
 use vage_block::Block;
 use vage_execution::{Executor, TransactionSource};
 use vage_types::{Address, NetworkMessage, Transaction};
-use std::sync::Arc;
-use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub struct ProposalMessage {
@@ -129,10 +129,10 @@ mod tests {
     use anyhow::Result;
     use ed25519_dalek::SigningKey;
     use primitive_types::U256;
+    use std::sync::Arc;
     use vage_block::{Block, BlockBody, BlockHeader};
     use vage_execution::TransactionSource;
     use vage_types::{Address, NetworkMessage, Receipt, Transaction};
-    use std::sync::Arc;
 
     struct MockTransactionSource {
         transactions: Vec<Transaction>,
@@ -272,7 +272,10 @@ mod tests {
         assert_eq!(proposal.block.hash(), block.hash());
         assert_eq!(proposal.quorum_certificate.block_hash, qc.block_hash);
         assert_eq!(proposer.proposal_hash(&proposal), block.hash());
-        assert_eq!(proposer.proposal_timeout(), std::time::Duration::from_secs(5));
+        assert_eq!(
+            proposer.proposal_timeout(),
+            std::time::Duration::from_secs(5)
+        );
     }
 
     #[test]
@@ -303,7 +306,12 @@ mod tests {
             .sign_block(&mut block, &signing_key)
             .expect("block signing should succeed");
         let proposal = ProposalMessage {
-            quorum_certificate: QuorumCertificate::new(block.parent_hash(), 0, Vec::new(), Vec::new()),
+            quorum_certificate: QuorumCertificate::new(
+                block.parent_hash(),
+                0,
+                Vec::new(),
+                Vec::new(),
+            ),
             block: block.clone(),
         };
 
@@ -331,7 +339,12 @@ mod tests {
 
         let wrong_proposer = ProposalMessage {
             block: block.clone(),
-            quorum_certificate: QuorumCertificate::new(block.parent_hash(), 0, Vec::new(), Vec::new()),
+            quorum_certificate: QuorumCertificate::new(
+                block.parent_hash(),
+                0,
+                Vec::new(),
+                Vec::new(),
+            ),
         };
         assert!(proposer.validate_proposal(&wrong_proposer).is_err());
 

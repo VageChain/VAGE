@@ -1,7 +1,7 @@
-use anyhow::{Result, Context};
-use vage_types::{Canonical, Transaction, Validator};
+use anyhow::{Context, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use vage_types::{Canonical, Transaction, Validator};
 
 /// Canonical cryptographic hash type.
 pub type Hash = [u8; 32];
@@ -51,8 +51,8 @@ pub fn hash_bytes(data: &[u8]) -> Hash {
 /// Concatenate and hash two hashes (useful for Merkle trees).
 pub fn hash_concat(left: Hash, right: Hash) -> Hash {
     let mut hasher = Sha256::new();
-    hasher.update(&left);
-    hasher.update(&right);
+    hasher.update(left);
+    hasher.update(right);
     let result = hasher.finalize();
     let mut hash = [0u8; 32];
     hash.copy_from_slice(&result);
@@ -98,7 +98,8 @@ pub fn hash_hex(hash: Hash) -> String {
 
 /// Parse a hexadecimal string into a 32-byte hash.
 pub fn parse_hash(h: &str) -> Result<Hash> {
-    let vec = hex::decode(h.trim_start_matches("0x")).context("Invalid hex string for hash parsing")?;
+    let vec =
+        hex::decode(h.trim_start_matches("0x")).context("Invalid hex string for hash parsing")?;
     if vec.len() != 32 {
         anyhow::bail!("Invalid hash length: expected 32 bytes, got {}", vec.len());
     }
@@ -131,7 +132,7 @@ impl Hashable for Validator {
 
 /// Generate cryptographically secure random bytes of a given length.
 pub fn secure_random_bytes(len: usize) -> Vec<u8> {
-    use rand::{RngCore, thread_rng};
+    use rand::{thread_rng, RngCore};
     let mut bytes = vec![0u8; len];
     thread_rng().fill_bytes(&mut bytes);
     bytes
@@ -139,7 +140,7 @@ pub fn secure_random_bytes(len: usize) -> Vec<u8> {
 
 /// Generate a 32-byte cryptographically secure random seed.
 pub fn generate_seed() -> [u8; 32] {
-    use rand::{RngCore, thread_rng};
+    use rand::{thread_rng, RngCore};
     let mut seed = [0u8; 32];
     thread_rng().fill_bytes(&mut seed);
     seed
@@ -149,7 +150,7 @@ pub fn generate_seed() -> [u8; 32] {
 pub fn derive_key(seed: &[u8; 32], index: u64) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(seed);
-    hasher.update(&index.to_le_bytes());
+    hasher.update(index.to_le_bytes());
     let result = hasher.finalize();
     let mut key = [0u8; 32];
     key.copy_from_slice(&result);
@@ -173,7 +174,12 @@ pub fn hash_address(addr: &vage_types::Address) -> Hash {
 
 #[cfg(test)]
 mod tests {
-    use super::{derive_key, domain_hash, domain_hash_into, generate_seed, hash_address, hash_bytes, hash_chain, hash_concat, hash_empty, hash_hex, hash_pair, hash_pair_into, hash_string, hash_struct, hash_u64, parse_hash, secure_random_bytes, sha256, sha256_into, DOMAIN_CONSENSUS, GENESIS_HASH};
+    use super::{
+        derive_key, domain_hash, domain_hash_into, generate_seed, hash_address, hash_bytes,
+        hash_chain, hash_concat, hash_empty, hash_hex, hash_pair, hash_pair_into, hash_string,
+        hash_struct, hash_u64, parse_hash, secure_random_bytes, sha256, sha256_into,
+        DOMAIN_CONSENSUS, GENESIS_HASH,
+    };
     use vage_types::{Address, Canonical, NetworkMessage, Transaction};
 
     #[test]
@@ -203,12 +209,7 @@ mod tests {
 
     #[test]
     fn hash_struct_uses_deterministic_encoding() {
-        let tx = Transaction::new_transfer(
-            Address([1u8; 32]),
-            Address([2u8; 32]),
-            3u64.into(),
-            4,
-        );
+        let tx = Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), 3u64.into(), 4);
 
         assert_eq!(hash_struct(&tx), hash_struct(&tx));
         assert_eq!(hash_struct(&tx), sha256(&Canonical::encode(&tx)));
@@ -237,7 +238,10 @@ mod tests {
         let data = b"block-data";
         let address = Address([9u8; 32]);
 
-        assert_eq!(hash_chain(previous_hash, data), hash_pair(&previous_hash, &sha256(data)));
+        assert_eq!(
+            hash_chain(previous_hash, data),
+            hash_pair(&previous_hash, &sha256(data))
+        );
         assert_eq!(hash_u64(42), sha256(&42u64.to_le_bytes()));
         assert_eq!(hash_address(&address), sha256(address.as_bytes()));
     }
@@ -255,7 +259,10 @@ mod tests {
 
         assert_eq!(node_a_bytes, node_b_bytes);
         assert_eq!(hash_struct(&message), sha256(&node_a_bytes));
-        assert_ne!(super::domain_hash(DOMAIN_CONSENSUS, &node_a_bytes), sha256(&node_a_bytes));
+        assert_ne!(
+            super::domain_hash(DOMAIN_CONSENSUS, &node_a_bytes),
+            sha256(&node_a_bytes)
+        );
     }
 
     #[test]

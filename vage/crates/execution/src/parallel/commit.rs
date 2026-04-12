@@ -2,15 +2,14 @@
 ///
 /// Validates that the results of parallel execution are serializable and
 /// can be committed atomically without violating consistency.
-
 use crate::parallel::executor::{ParallelExecutionResult, TxExecutionOutcome};
 use crate::parallel::mv_memory::{MVMemory, TxVersion};
 use anyhow::{anyhow, bail, Result};
-use vage_state::StateDb;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
+use vage_state::StateDb;
 
 /// Represents a validated snapshot of transaction execution results.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -282,7 +281,10 @@ impl CommitProtocol {
     }
 
     /// Validates the execution results for commitability.
-    pub fn validate_for_commit(&mut self, result: &ParallelExecutionResult) -> Result<CommitResult> {
+    pub fn validate_for_commit(
+        &mut self,
+        result: &ParallelExecutionResult,
+    ) -> Result<CommitResult> {
         if !self.phase.eq(&CommitPhase::Executed) {
             return Ok(CommitResult::with_error(
                 self.phase.clone(),
@@ -295,7 +297,10 @@ impl CommitProtocol {
         if let Err(e) = self.serialization_validator.can_commit(result) {
             warn!("serialization validation failed: {}", e);
             self.phase = CommitPhase::Aborted;
-            return Ok(CommitResult::with_error(CommitPhase::Aborted, e.to_string()));
+            return Ok(CommitResult::with_error(
+                CommitPhase::Aborted,
+                e.to_string(),
+            ));
         }
 
         self.advance()?;
@@ -310,7 +315,10 @@ impl CommitProtocol {
                 ) {
                     warn!("version validation failed: {}", e);
                     self.phase = CommitPhase::Aborted;
-                    return Ok(CommitResult::with_error(CommitPhase::Aborted, e.to_string()));
+                    return Ok(CommitResult::with_error(
+                        CommitPhase::Aborted,
+                        e.to_string(),
+                    ));
                 }
             }
         }
@@ -326,10 +334,7 @@ impl CommitProtocol {
     /// Finalizes the commit, transitioning to Committed phase.
     pub fn finalize_commit(&mut self) -> Result<CommitResult> {
         if !self.phase.eq(&CommitPhase::ReadyToCommit) {
-            return Err(anyhow!(
-                "cannot finalize commit in phase {:?}",
-                self.phase
-            ));
+            return Err(anyhow!("cannot finalize commit in phase {:?}", self.phase));
         }
 
         self.advance()?;
@@ -433,7 +438,10 @@ pub struct CommitManagerConfig {
 
 impl Default for CommitManagerConfig {
     fn default() -> Self {
-        Self { abort_on_conflict: false, flush_to_disk: true }
+        Self {
+            abort_on_conflict: false,
+            flush_to_disk: true,
+        }
     }
 }
 
@@ -496,7 +504,9 @@ impl CommitManager {
         self.pending.extend(outcomes);
     }
 
-    pub fn pending_count(&self) -> usize { self.pending.len() }
+    pub fn pending_count(&self) -> usize {
+        self.pending.len()
+    }
 
     // item 3 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -516,7 +526,9 @@ impl CommitManager {
         };
         let mut invalid = Vec::new();
         for outcome in &self.pending {
-            if self.discarded.contains(&outcome.tx_index) { continue; }
+            if self.discarded.contains(&outcome.tx_index) {
+                continue;
+            }
             let tv = TxVersion::new(outcome.tx_index);
             match mv.validate_reads(tv) {
                 Ok(true) => {}
@@ -541,14 +553,22 @@ impl CommitManager {
         let mut key_first_writer: HashMap<&Vec<u8>, usize> = HashMap::new();
         let mut conflicted: HashSet<usize> = HashSet::new();
         for outcome in &self.pending {
-            if self.discarded.contains(&outcome.tx_index) { continue; }
+            if self.discarded.contains(&outcome.tx_index) {
+                continue;
+            }
             for key in outcome.speculative_writes.keys() {
                 match key_first_writer.get(key) {
                     Some(&first) => {
                         conflicted.insert(outcome.tx_index);
-                        debug!(first_writer = first, loser = outcome.tx_index, "WAW conflict");
+                        debug!(
+                            first_writer = first,
+                            loser = outcome.tx_index,
+                            "WAW conflict"
+                        );
                     }
-                    None => { key_first_writer.insert(key, outcome.tx_index); }
+                    None => {
+                        key_first_writer.insert(key, outcome.tx_index);
+                    }
                 }
             }
         }
@@ -562,7 +582,9 @@ impl CommitManager {
         let conflicts = self.detect_state_conflicts();
         let mut count = 0usize;
         for outcome in &self.pending {
-            if self.discarded.contains(&outcome.tx_index) { continue; }
+            if self.discarded.contains(&outcome.tx_index) {
+                continue;
+            }
             if conflicts.contains(&outcome.tx_index) {
                 self.discarded.insert(outcome.tx_index);
                 continue;
@@ -633,7 +655,9 @@ impl CommitManager {
     }
 
     /// Returns the last committed state root.
-    pub fn last_state_root(&self) -> [u8; 32] { self.last_state_root }
+    pub fn last_state_root(&self) -> [u8; 32] {
+        self.last_state_root
+    }
 
     // â”€â”€â”€ Full pipeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -646,7 +670,10 @@ impl CommitManager {
 
         let invalid_reads = self.validate_read_sets();
         if !invalid_reads.is_empty() && self.config.abort_on_conflict {
-            bail!("commit aborted: {} transactions have stale read sets", invalid_reads.len());
+            bail!(
+                "commit aborted: {} transactions have stale read sets",
+                invalid_reads.len()
+            );
         }
         self.discard_invalid(&invalid_reads);
 
@@ -701,20 +728,23 @@ mod commit_manager_tests {
     }
 
     // item 1
-    #[test] fn commit_manager_new() {
+    #[test]
+    fn commit_manager_new() {
         let cm = CommitManager::new(CommitManagerConfig::default());
         assert_eq!(cm.pending_count(), 0);
         assert_eq!(cm.last_state_root(), [0u8; 32]);
     }
 
     // item 2
-    #[test] fn receive_results_adds_to_pending() {
+    #[test]
+    fn receive_results_adds_to_pending() {
         let mut cm = CommitManager::new(CommitManagerConfig::default());
         cm.receive_results(vec![make_outcome(0, &[]), make_outcome(1, &[])]);
         assert_eq!(cm.pending_count(), 2);
     }
 
-    #[test] fn receive_results_multiple_calls() {
+    #[test]
+    fn receive_results_multiple_calls() {
         let mut cm = CommitManager::new(CommitManagerConfig::default());
         cm.receive_results(vec![make_outcome(0, &[])]);
         cm.receive_results(vec![make_outcome(1, &[])]);
@@ -722,11 +752,14 @@ mod commit_manager_tests {
     }
 
     // item 3
-    #[test] fn order_by_tx_index_ascending() {
+    #[test]
+    fn order_by_tx_index_ascending() {
         let mut cm = CommitManager::new(CommitManagerConfig::default());
         cm.receive_results(vec![
-            make_outcome(3, &[]), make_outcome(1, &[]),
-            make_outcome(0, &[]), make_outcome(2, &[]),
+            make_outcome(3, &[]),
+            make_outcome(1, &[]),
+            make_outcome(0, &[]),
+            make_outcome(2, &[]),
         ]);
         cm.order_by_tx_index();
         let idx: Vec<usize> = cm.pending.iter().map(|o| o.tx_index).collect();
@@ -734,14 +767,16 @@ mod commit_manager_tests {
     }
 
     // item 4
-    #[test] fn validate_read_sets_no_mv_memory_passes() {
+    #[test]
+    fn validate_read_sets_no_mv_memory_passes() {
         let mut cm = CommitManager::new(CommitManagerConfig::default());
         cm.receive_results(vec![make_outcome(0, &[])]);
         assert!(cm.validate_read_sets().is_empty());
     }
 
     // item 5
-    #[test] fn detect_conflicts_waw() {
+    #[test]
+    fn detect_conflicts_waw() {
         let mut cm = CommitManager::new(CommitManagerConfig::default());
         cm.receive_results(vec![
             make_outcome(0, &[(b"x", b"v0")]),
@@ -752,7 +787,8 @@ mod commit_manager_tests {
         assert!(c.contains(&1) && !c.contains(&0));
     }
 
-    #[test] fn detect_conflicts_disjoint_keys_clean() {
+    #[test]
+    fn detect_conflicts_disjoint_keys_clean() {
         let mut cm = CommitManager::new(CommitManagerConfig::default());
         cm.receive_results(vec![
             make_outcome(0, &[(b"a", b"1")]),
@@ -763,7 +799,8 @@ mod commit_manager_tests {
     }
 
     // item 6
-    #[test] fn finalize_writes_merges_clean() {
+    #[test]
+    fn finalize_writes_merges_clean() {
         let mut cm = CommitManager::new(CommitManagerConfig::default());
         cm.receive_results(vec![
             make_outcome(0, &[(b"a", b"1")]),
@@ -775,7 +812,8 @@ mod commit_manager_tests {
         assert_eq!(cm.finalized_writes[b"a".as_ref()], b"1");
     }
 
-    #[test] fn finalize_writes_discards_conflict_loser() {
+    #[test]
+    fn finalize_writes_discards_conflict_loser() {
         let mut cm = CommitManager::new(CommitManagerConfig::default());
         cm.receive_results(vec![
             make_outcome(0, &[(b"x", b"winner")]),
@@ -788,13 +826,15 @@ mod commit_manager_tests {
     }
 
     // item 7 â€” tested indirectly via finalized_writes state
-    #[test] fn update_state_db_no_writes_noop() {
+    #[test]
+    fn update_state_db_no_writes_noop() {
         let cm = CommitManager::new(CommitManagerConfig::default());
         assert!(cm.finalized_writes.is_empty());
     }
 
     // item 8
-    #[test] fn discard_invalid_marks_indices() {
+    #[test]
+    fn discard_invalid_marks_indices() {
         let mut cm = CommitManager::new(CommitManagerConfig::default());
         cm.receive_results(vec![make_outcome(0, &[]), make_outcome(1, &[])]);
         cm.discard_invalid(&[0]);
@@ -802,7 +842,8 @@ mod commit_manager_tests {
         assert!(!cm.discarded.contains(&1));
     }
 
-    #[test] fn discard_invalid_prevents_finalization() {
+    #[test]
+    fn discard_invalid_prevents_finalization() {
         let mut cm = CommitManager::new(CommitManagerConfig::default());
         cm.receive_results(vec![
             make_outcome(0, &[(b"k", b"v")]),
@@ -816,28 +857,42 @@ mod commit_manager_tests {
     }
 
     // item 9
-    #[test] fn commit_summary_is_clean() {
-        let s = CommitSummary { total_received: 3, finalized_writes: 5,
-            discarded_txs: 0, state_root: [0u8; 32] };
+    #[test]
+    fn commit_summary_is_clean() {
+        let s = CommitSummary {
+            total_received: 3,
+            finalized_writes: 5,
+            discarded_txs: 0,
+            state_root: [0u8; 32],
+        };
         assert!(s.is_clean());
     }
 
-    #[test] fn commit_summary_not_clean() {
-        let s = CommitSummary { total_received: 3, finalized_writes: 2,
-            discarded_txs: 1, state_root: [0u8; 32] };
+    #[test]
+    fn commit_summary_not_clean() {
+        let s = CommitSummary {
+            total_received: 3,
+            finalized_writes: 2,
+            discarded_txs: 1,
+            state_root: [0u8; 32],
+        };
         assert!(!s.is_clean());
     }
 
     // item 10
-    #[test] fn last_state_root_default_zero() {
+    #[test]
+    fn last_state_root_default_zero() {
         let cm = CommitManager::new(CommitManagerConfig::default());
         assert_eq!(cm.last_state_root(), [0u8; 32]);
     }
 
     // pipeline integration
-    #[test] fn pipeline_ordering_and_conflict_resolution() {
+    #[test]
+    fn pipeline_ordering_and_conflict_resolution() {
         let mut cm = CommitManager::new(CommitManagerConfig {
-            flush_to_disk: false, ..Default::default() });
+            flush_to_disk: false,
+            ..Default::default()
+        });
         cm.receive_results(vec![
             make_outcome(3, &[(b"shared", b"loser")]),
             make_outcome(1, &[(b"uniq_1", b"v1")]),

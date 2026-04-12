@@ -6,6 +6,11 @@
 /// - Storage persists and retrieves all data across restarts
 use ed25519_dalek::{Signer, SigningKey};
 use primitive_types::U256;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::Mutex;
 use vage_block::{Block, BlockBody, BlockHeader};
 use vage_consensus::hotstuff::vote::Vote;
 use vage_consensus::Consensus;
@@ -19,11 +24,6 @@ use vage_state::StateDB;
 use vage_storage::StorageEngine;
 use vage_types::validator::ValidatorStatus;
 use vage_types::{Account, Address, Transaction, Validator};
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::Mutex;
 
 // bincode is needed for serialising blocks into the storage layer
 extern crate bincode;
@@ -103,10 +103,9 @@ fn storage_persists_block_and_state_across_reopen() {
     let (storage, path) = make_storage("persist");
 
     let genesis = Block::genesis([0u8; 32]);
-    let header_bytes = bincode::serialize(&genesis.header)
-        .expect("header serialization should succeed");
-    let body_bytes = bincode::serialize(&genesis.body)
-        .expect("body serialization should succeed");
+    let header_bytes =
+        bincode::serialize(&genesis.header).expect("header serialization should succeed");
+    let body_bytes = bincode::serialize(&genesis.body).expect("body serialization should succeed");
     storage
         .atomic_block_commit(genesis.header.height, header_bytes, body_bytes)
         .expect("genesis block should store");
@@ -125,8 +124,7 @@ fn storage_persists_block_and_state_across_reopen() {
 
     // Reopen
     let storage2 = Arc::new(
-        StorageEngine::new(path.to_string_lossy().as_ref())
-            .expect("storage reopen should succeed"),
+        StorageEngine::new(path.to_string_lossy().as_ref()).expect("storage reopen should succeed"),
     );
     let height = storage2
         .latest_block_height()
@@ -136,7 +134,10 @@ fn storage_persists_block_and_state_across_reopen() {
     let loaded_header = storage2
         .get_block_header(0)
         .expect("block header load should succeed");
-    assert!(loaded_header.is_some(), "genesis header should be found after reopen");
+    assert!(
+        loaded_header.is_some(),
+        "genesis header should be found after reopen"
+    );
     assert_eq!(loaded_header.unwrap().height, genesis.header.height);
 
     let state2 = StateDB::new(storage2);
@@ -238,7 +239,10 @@ fn consensus_reaches_quorum_and_advances_view() {
         .process_vote(vote_b)
         .expect("vote_b should be accepted");
 
-    assert!(qc.is_some(), "quorum certificate should be produced on second vote");
+    assert!(
+        qc.is_some(),
+        "quorum certificate should be produced on second vote"
+    );
 
     let _ = fs::remove_file(&path);
 }
@@ -261,8 +265,12 @@ fn pipeline_consensus_finalises_block_then_execution_updates_state() {
     // Seed sender and recipient in state
     let mut sender = Account::new(sender_addr);
     sender.increase_balance(U256::from(1_000_000u64));
-    state.update_account(&sender_addr, &sender).expect("seed sender");
-    state.update_account(&recipient_addr, &Account::new(recipient_addr)).expect("seed recipient");
+    state
+        .update_account(&sender_addr, &sender)
+        .expect("seed sender");
+    state
+        .update_account(&recipient_addr, &Account::new(recipient_addr))
+        .expect("seed recipient");
     state.commit().expect("initial state commit");
 
     // Consensus flow: elect validators, propose an empty block, reach quorum, commit.
@@ -271,10 +279,8 @@ fn pipeline_consensus_finalises_block_then_execution_updates_state() {
     consensus.update_validator_set(vec![validator_a.clone(), validator_b.clone()]);
 
     let genesis = Block::genesis([0u8; 32]);
-    let leader = consensus
-        .current_leader()
-        .expect("leader should exist");
-    // Use an empty block so validate_basic() passes (no receipts needed).  
+    let leader = consensus.current_leader().expect("leader should exist");
+    // Use an empty block so validate_basic() passes (no receipts needed).
     let proposal = empty_block(genesis.hash(), 1, leader);
     let block_hash = proposal.hash();
 
@@ -331,8 +337,7 @@ fn storage_migration_preserves_data_on_reopen() {
 
     // Reopen â€” schema version check must not wipe data
     let storage2 = Arc::new(
-        StorageEngine::new(path.to_string_lossy().as_ref())
-            .expect("reopen should succeed"),
+        StorageEngine::new(path.to_string_lossy().as_ref()).expect("reopen should succeed"),
     );
     let loaded = storage2
         .state_get(b"sentinel".to_vec())
@@ -353,12 +358,7 @@ fn make_block_h(parent_hash: [u8; 32], height: u64) -> Block {
 }
 
 fn make_qc_h(block: &Block, view: u64) -> vage_consensus::hotstuff::vote::QuorumCertificate {
-    vage_consensus::hotstuff::vote::QuorumCertificate::new(
-        block.hash(),
-        view,
-        vec![],
-        vec![],
-    )
+    vage_consensus::hotstuff::vote::QuorumCertificate::new(block.hash(), view, vec![], vec![])
 }
 
 #[test]
@@ -372,9 +372,16 @@ fn hotstuff_locked_block_is_set_at_precommit_and_not_before() {
 
     assert!(hs.locked_block.is_none(), "no locked block before Prepare");
     hs.apply_three_phase_commit_rule(&b1, qc1.clone()).unwrap(); // Prepare
-    assert!(hs.locked_block.is_none(), "locked block must not be set at Prepare");
+    assert!(
+        hs.locked_block.is_none(),
+        "locked block must not be set at Prepare"
+    );
     hs.apply_three_phase_commit_rule(&b1, qc1).unwrap(); // PreCommit
-    assert_eq!(hs.locked_block, Some(b1.hash()), "locked block set at PreCommit");
+    assert_eq!(
+        hs.locked_block,
+        Some(b1.hash()),
+        "locked block set at PreCommit"
+    );
 }
 
 #[test]
@@ -406,7 +413,7 @@ fn hotstuff_rejects_conflicting_fork_after_lock() {
     let b1 = make_block_h(genesis.hash(), 1);
     let q1 = make_qc_h(&b1, 1);
     hs.apply_three_phase_commit_rule(&b1, q1.clone()).unwrap(); // Prepare
-    hs.apply_three_phase_commit_rule(&b1, q1).unwrap();         // PreCommit â†’ locked
+    hs.apply_three_phase_commit_rule(&b1, q1).unwrap(); // PreCommit â†’ locked
 
     // Fork that does NOT extend b1 (returns to genesis directly).
     let mut fork = make_block_h(genesis.hash(), 1);
@@ -439,7 +446,10 @@ fn transaction_without_chain_id_is_rejected_by_validator() {
     );
     tx.chain_id = None;
 
-    assert!(validator.validate(&tx).is_err(), "tx without chain_id must be rejected");
+    assert!(
+        validator.validate(&tx).is_err(),
+        "tx without chain_id must be rejected"
+    );
     let _ = fs::remove_file(&path);
 }
 
@@ -462,7 +472,10 @@ async fn light_client_requests_state_proof_against_historical_snapshot() {
         .snapshot_state(1)
         .expect("historical snapshot should persist");
     storage
-        .state_put(b"execution:block:state_root:1".to_vec(), state_root.to_vec())
+        .state_put(
+            b"execution:block:state_root:1".to_vec(),
+            state_root.to_vec(),
+        )
         .expect("block state root should persist");
 
     let genesis = BlockHeader::genesis();
@@ -504,14 +517,18 @@ async fn light_client_requests_state_proof_against_historical_snapshot() {
     let mut network = P2PNetwork::new(p2p_test_config())
         .await
         .expect("network should initialize");
-    network.peer_store.add_peer(Peer::new(peer_id, tcp_addr(22002)));
+    network
+        .peer_store
+        .add_peer(Peer::new(peer_id, tcp_addr(22002)));
     network.queue_mock_rpc_response(L1Response::respond_latest_block_height(Some(1)));
     network.queue_mock_rpc_response(L1Response::respond_headers(Some(vec![envelope])));
-    network.queue_mock_rpc_response(L1Response::respond_state_proof(Some(RpcStateProofResponse {
+    network.queue_mock_rpc_response(L1Response::respond_state_proof(Some(
+        RpcStateProofResponse {
             height: 1,
             proof: proof.1,
             value: RpcStateProofValue::Account(proof.0.clone()),
-        })));
+        },
+    )));
 
     let client = LightClient::new_with_validator_set(
         Arc::new(Mutex::new(network)),
@@ -551,7 +568,10 @@ fn transaction_with_wrong_chain_id_is_rejected() {
     );
     tx.chain_id = Some(999); // wrong chain
 
-    assert!(validator.validate(&tx).is_err(), "tx with wrong chain_id must be rejected");
+    assert!(
+        validator.validate(&tx).is_err(),
+        "tx with wrong chain_id must be rejected"
+    );
     let _ = fs::remove_file(&path);
 }
 
@@ -588,19 +608,34 @@ fn validator_double_vote_is_slashed_and_removed_from_active_set() {
         .detect_double_vote(&vote_a, &vote_b)
         .expect("double vote should be detected");
     let evidence_id = slashing
-        .record_evidence(validator_address, misbehavior, 42, validator_address, [0u8; 64])
+        .record_evidence(
+            validator_address,
+            misbehavior,
+            42,
+            validator_address,
+            [0u8; 64],
+        )
         .expect("evidence should be recorded");
     slashing
         .confirm_misbehavior(&evidence_id, &validator)
         .expect("evidence should be confirmed");
 
     let event = slashing
-        .execute_slash(&evidence_id, 42, &mut validator_set, &mut staking, &mut governance)
+        .execute_slash(
+            &evidence_id,
+            42,
+            &mut validator_set,
+            &mut staking,
+            &mut governance,
+        )
         .expect("slash execution should succeed");
 
     assert!(event.slash_amount > U256::zero());
     assert!(
-        !validator_set.active_validators().iter().any(|v| v.address == validator_address),
+        !validator_set
+            .active_validators()
+            .iter()
+            .any(|v| v.address == validator_address),
         "slashed validator must be removed from active validator set"
     );
 
@@ -612,4 +647,3 @@ fn validator_double_vote_is_slashed_and_removed_from_active_set() {
     drop(storage);
     let _ = fs::remove_file(&path);
 }
-

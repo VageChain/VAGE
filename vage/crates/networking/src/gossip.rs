@@ -1,18 +1,18 @@
+use crate::peer::PeerStore;
 use anyhow::{bail, Context, Result};
 use libp2p::{gossipsub::IdentTopic, PeerId};
-use vage_block::Block;
-use vage_block::BlockBody;
-use vage_consensus::hotstuff::vote::{QuorumCertificate, Vote};
-use vage_types::Validator;
-use vage_types::Transaction;
-use vage_types::MAX_CANONICAL_MESSAGE_SIZE;
-use vage_zk::{BlockValidityProof, Sp1Verifier};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use crate::peer::PeerStore;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use vage_block::Block;
+use vage_block::BlockBody;
+use vage_consensus::hotstuff::vote::{QuorumCertificate, Vote};
+use vage_types::Transaction;
+use vage_types::Validator;
+use vage_types::MAX_CANONICAL_MESSAGE_SIZE;
+use vage_zk::{BlockValidityProof, Sp1Verifier};
 
 pub const TOPIC_BLOCKS: &str = "l1/blocks";
 pub const TOPIC_TRANSACTIONS: &str = "l1/txs";
@@ -671,23 +671,23 @@ fn unix_timestamp() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use anyhow::Result;
     use super::{
         BlockConsensusSink, BlockParentLookup, BlockPoolSink, BlockProofVerifier,
-        BlockQuorumCertificateVerifier, BlockSignatureVerifier, BlockValidatorSetVerifier,
-        Gossip, GossipMessage, MessageValidationFailure,
-        QuorumCertificateBroadcaster, QuorumCertificateConsensusSink,
-        QuorumCertificateVerifier, TransactionGossipOutcome, TransactionPoolSink,
-        TransactionSignatureVerifier, VoteConsensusSink, VoteSignatureVerifier, TOPIC_BLOCKS,
-        TOPIC_QUORUM_CERTIFICATES, TOPIC_STATE_SYNC, TOPIC_TRANSACTIONS, TOPIC_VOTES,
+        BlockQuorumCertificateVerifier, BlockSignatureVerifier, BlockValidatorSetVerifier, Gossip,
+        GossipMessage, MessageValidationFailure, QuorumCertificateBroadcaster,
+        QuorumCertificateConsensusSink, QuorumCertificateVerifier, TransactionGossipOutcome,
+        TransactionPoolSink, TransactionSignatureVerifier, VoteConsensusSink,
+        VoteSignatureVerifier, TOPIC_BLOCKS, TOPIC_QUORUM_CERTIFICATES, TOPIC_STATE_SYNC,
+        TOPIC_TRANSACTIONS, TOPIC_VOTES,
     };
+    use anyhow::Result;
     use libp2p::{identity::Keypair, PeerId};
     use primitive_types::U256;
+    use std::cell::RefCell;
     use vage_block::{Block, BlockBody, BlockHeader};
     use vage_consensus::hotstuff::vote::{QuorumCertificate, Vote};
-    use vage_types::{Address, Transaction, Validator};
-    use std::cell::RefCell;
     use vage_types::MAX_CANONICAL_MESSAGE_SIZE;
+    use vage_types::{Address, Transaction, Validator};
 
     #[derive(Default)]
     struct MockTransactionPool {
@@ -857,13 +857,22 @@ mod tests {
     fn peer_id(seed: u8) -> PeerId {
         let mut bytes = [seed; 32];
         bytes[0] = bytes[0].max(1);
-        PeerId::from(Keypair::ed25519_from_bytes(bytes).expect("keypair should build").public())
+        PeerId::from(
+            Keypair::ed25519_from_bytes(bytes)
+                .expect("keypair should build")
+                .public(),
+        )
     }
 
     fn signed_transaction(seed: u8, nonce: u64) -> Transaction {
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&[seed; 32]);
         let from = Address::from_public_key(&signing_key.verifying_key().to_bytes());
-        let mut tx = Transaction::new_transfer(from, Address([seed.saturating_add(1); 32]), U256::from(1u64), nonce);
+        let mut tx = Transaction::new_transfer(
+            from,
+            Address([seed.saturating_add(1); 32]),
+            U256::from(1u64),
+            nonce,
+        );
         tx.sign(&signing_key).expect("transaction should sign");
         tx
     }
@@ -879,7 +888,11 @@ mod tests {
     fn gossip_block(parent_hash: [u8; 32], height: u64) -> Block {
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
         let proposer = Address::from_public_key(&signing_key.verifying_key().to_bytes());
-        let mut validator = vage_types::Validator::new(proposer, signing_key.verifying_key().to_bytes(), U256::from(10u64.pow(18)));
+        let mut validator = vage_types::Validator::new(
+            proposer,
+            signing_key.verifying_key().to_bytes(),
+            U256::from(10u64.pow(18)),
+        );
         validator.status = vage_types::validator::ValidatorStatus::Active;
         let mut header = BlockHeader::new(parent_hash, height);
         header.proposer = proposer;
@@ -887,10 +900,7 @@ mod tests {
         let mut block = Block::new(header, BlockBody::empty());
         block.compute_roots();
         block.attach_validity_proof(vec![1, 2, 3]);
-        block
-            .header
-            .sign(&signing_key)
-            .expect("block should sign");
+        block.header.sign(&signing_key).expect("block should sign");
         block
     }
 
@@ -937,7 +947,9 @@ mod tests {
             .expect("handle message should succeed");
         assert!(matches!(propagated, GossipMessage::StateSync(bytes) if bytes == vec![9, 9, 9]));
 
-        let duplicate = gossip.handle_message(peer, message).expect_err("duplicate should fail");
+        let duplicate = gossip
+            .handle_message(peer, message)
+            .expect_err("duplicate should fail");
         assert_eq!(
             Gossip::classify_message_error(&duplicate),
             MessageValidationFailure::DuplicateMessage
@@ -995,7 +1007,13 @@ mod tests {
             gossip.message_cache(GossipMessage::Transaction(vec![index as u8]));
         }
         assert_eq!(gossip.cached_messages.len(), 1024);
-        assert_eq!(gossip.cached_messages.front().map(|message| message.encode()), Some(GossipMessage::Transaction(vec![1]).encode()));
+        assert_eq!(
+            gossip
+                .cached_messages
+                .front()
+                .map(|message| message.encode()),
+            Some(GossipMessage::Transaction(vec![1]).encode())
+        );
 
         let peer = peer_id(2);
         for _ in 0..128 {
@@ -1034,7 +1052,10 @@ mod tests {
         assert_eq!(outcome.transaction.hash(), tx.hash());
         assert!(outcome.rebroadcast.is_none());
         assert_eq!(pool.inserted.borrow().len(), 1);
-        assert_eq!(pool.inserted.borrow()[0].1.as_deref(), Some(peer.to_string().as_str()));
+        assert_eq!(
+            pool.inserted.borrow()[0].1.as_deref(),
+            Some(peer.to_string().as_str())
+        );
 
         let duplicate = gossip
             .receive_transaction_gossip_message(peer, &payload, &pool, &verifier)
@@ -1052,17 +1073,29 @@ mod tests {
         let pool = MockTransactionPool::default();
         let peer = peer_id(4);
 
-        let mut unsigned_tx = Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(1u64), 0);
+        let mut unsigned_tx =
+            Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(1u64), 0);
         unsigned_tx.signer_pubkey = Some([1u8; 32]);
-        let unsigned_payload = bincode::serialize(&unsigned_tx).expect("unsigned tx should serialize");
+        let unsigned_payload =
+            bincode::serialize(&unsigned_tx).expect("unsigned tx should serialize");
         assert!(gossip
-            .receive_transaction_gossip_message(peer, &unsigned_payload, &pool, &MockTransactionVerifier { valid: true })
+            .receive_transaction_gossip_message(
+                peer,
+                &unsigned_payload,
+                &pool,
+                &MockTransactionVerifier { valid: true }
+            )
             .is_err());
 
         let signed_tx = signed_transaction(5, 1);
         let signed_payload = bincode::serialize(&signed_tx).expect("signed tx should serialize");
         assert!(gossip
-            .receive_transaction_gossip_message(peer_id(5), &signed_payload, &pool, &MockTransactionVerifier { valid: false })
+            .receive_transaction_gossip_message(
+                peer_id(5),
+                &signed_payload,
+                &pool,
+                &MockTransactionVerifier { valid: false }
+            )
             .is_err());
     }
 
@@ -1092,14 +1125,26 @@ mod tests {
         let payload = bincode::serialize(&block).expect("block should serialize");
 
         let outcome = gossip
-            .receive_block_gossip_message(peer_id(6), &payload, &pool, &parent_lookup, &consensus, &verifier, &proof_verifier, &validator_set_verifier, &qc_verifier)
+            .receive_block_gossip_message(
+                peer_id(6),
+                &payload,
+                &pool,
+                &parent_lookup,
+                &consensus,
+                &verifier,
+                &proof_verifier,
+                &validator_set_verifier,
+                &qc_verifier,
+            )
             .expect("block gossip should succeed");
 
         assert!(outcome.inserted);
         assert!(outcome.forwarded_to_consensus);
         assert_eq!(pool.inserted.borrow().len(), 1);
         assert_eq!(consensus.forwarded.borrow().len(), 1);
-        assert!(matches!(outcome.rebroadcast, Some(GossipMessage::Block(bytes)) if bytes == payload));
+        assert!(
+            matches!(outcome.rebroadcast, Some(GossipMessage::Block(bytes)) if bytes == payload)
+        );
     }
 
     #[test]
@@ -1124,16 +1169,56 @@ mod tests {
         };
 
         assert!(gossip
-            .receive_block_gossip_message(peer_id(7), &payload, &pool, &MockParentLookup { available: false }, &consensus, &MockBlockVerifier { valid: true }, &MockProofVerifier { valid: true }, &validator_set_verifier, &MockBlockQcVerifier { valid: true })
+            .receive_block_gossip_message(
+                peer_id(7),
+                &payload,
+                &pool,
+                &MockParentLookup { available: false },
+                &consensus,
+                &MockBlockVerifier { valid: true },
+                &MockProofVerifier { valid: true },
+                &validator_set_verifier,
+                &MockBlockQcVerifier { valid: true }
+            )
             .is_err());
         assert!(gossip
-            .receive_block_gossip_message(peer_id(8), &payload, &pool, &MockParentLookup { available: true }, &consensus, &MockBlockVerifier { valid: false }, &MockProofVerifier { valid: true }, &validator_set_verifier, &MockBlockQcVerifier { valid: true })
+            .receive_block_gossip_message(
+                peer_id(8),
+                &payload,
+                &pool,
+                &MockParentLookup { available: true },
+                &consensus,
+                &MockBlockVerifier { valid: false },
+                &MockProofVerifier { valid: true },
+                &validator_set_verifier,
+                &MockBlockQcVerifier { valid: true }
+            )
             .is_err());
         assert!(gossip
-            .receive_block_gossip_message(peer_id(9), &payload, &pool, &MockParentLookup { available: true }, &consensus, &MockBlockVerifier { valid: true }, &MockProofVerifier { valid: false }, &validator_set_verifier, &MockBlockQcVerifier { valid: true })
+            .receive_block_gossip_message(
+                peer_id(9),
+                &payload,
+                &pool,
+                &MockParentLookup { available: true },
+                &consensus,
+                &MockBlockVerifier { valid: true },
+                &MockProofVerifier { valid: false },
+                &validator_set_verifier,
+                &MockBlockQcVerifier { valid: true }
+            )
             .is_err());
         assert!(gossip
-            .receive_block_gossip_message(peer_id(10), &payload, &pool, &MockParentLookup { available: true }, &consensus, &MockBlockVerifier { valid: true }, &MockProofVerifier { valid: true }, &validator_set_verifier, &MockBlockQcVerifier { valid: false })
+            .receive_block_gossip_message(
+                peer_id(10),
+                &payload,
+                &pool,
+                &MockParentLookup { available: true },
+                &consensus,
+                &MockBlockVerifier { valid: true },
+                &MockProofVerifier { valid: true },
+                &validator_set_verifier,
+                &MockBlockQcVerifier { valid: false }
+            )
             .is_err());
     }
 
@@ -1146,14 +1231,24 @@ mod tests {
         let payload = vote.encode();
 
         let outcome = gossip
-            .receive_vote_gossip_message(peer_id(10), &payload, &consensus, &MockVoteVerifier { valid: true })
+            .receive_vote_gossip_message(
+                peer_id(10),
+                &payload,
+                &consensus,
+                &MockVoteVerifier { valid: true },
+            )
             .expect("vote gossip should succeed");
 
         assert!(outcome.forwarded_to_consensus);
         assert_eq!(outcome.vote.block_hash, vote.block_hash);
         assert_eq!(consensus.forwarded.borrow().len(), 1);
         assert!(gossip
-            .receive_vote_gossip_message(peer_id(11), &payload, &consensus, &MockVoteVerifier { valid: false })
+            .receive_vote_gossip_message(
+                peer_id(11),
+                &payload,
+                &consensus,
+                &MockVoteVerifier { valid: false }
+            )
             .is_err());
     }
 
@@ -1164,21 +1259,40 @@ mod tests {
         let consensus = MockQcConsensus::default();
         let broadcaster = MockQcBroadcaster::default();
         let vote = signed_vote(9, [4u8; 32], 5);
-        let qc = QuorumCertificate::new(vote.block_hash, vote.view, vec![vote.signature.to_vec()], vec![vote.validator]);
+        let qc = QuorumCertificate::new(
+            vote.block_hash,
+            vote.view,
+            vec![vote.signature.to_vec()],
+            vec![vote.validator],
+        );
         let payload = qc.encode();
 
         let outcome = gossip
-            .receive_quorum_certificate_gossip_message(peer_id(12), &payload, &consensus, &MockQcVerifier { valid: true }, &broadcaster)
+            .receive_quorum_certificate_gossip_message(
+                peer_id(12),
+                &payload,
+                &consensus,
+                &MockQcVerifier { valid: true },
+                &broadcaster,
+            )
             .expect("qc gossip should succeed");
 
         assert!(outcome.forwarded_to_consensus);
         assert!(outcome.broadcast_to_validators);
         assert_eq!(consensus.forwarded.borrow().len(), 1);
         assert_eq!(broadcaster.broadcasted.borrow().len(), 1);
-        assert!(matches!(outcome.rebroadcast, Some(GossipMessage::QuorumCertificate(bytes)) if bytes == payload));
+        assert!(
+            matches!(outcome.rebroadcast, Some(GossipMessage::QuorumCertificate(bytes)) if bytes == payload)
+        );
 
         assert!(gossip
-            .receive_quorum_certificate_gossip_message(peer_id(13), &payload, &consensus, &MockQcVerifier { valid: false }, &broadcaster)
+            .receive_quorum_certificate_gossip_message(
+                peer_id(13),
+                &payload,
+                &consensus,
+                &MockQcVerifier { valid: false },
+                &broadcaster
+            )
             .is_err());
     }
 }

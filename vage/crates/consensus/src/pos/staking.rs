@@ -1,10 +1,10 @@
 use anyhow::{bail, Result};
-use vage_storage::StorageEngine;
-use vage_types::{Address, Validator};
 use primitive_types::U256;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use vage_storage::StorageEngine;
+use vage_types::{Address, Validator};
 
 const STAKING_STATE_PREFIX: &[u8] = b"staking:";
 const DEFAULT_LOCKUP_PERIOD_EPOCHS: u64 = 7;
@@ -201,12 +201,12 @@ impl StakingManager {
 mod tests {
     use super::{Stake, StakingManager};
     use primitive_types::U256;
-    use vage_storage::StorageEngine;
-    use vage_types::{Address, Validator};
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use vage_storage::StorageEngine;
+    use vage_types::{Address, Validator};
 
     fn unique_storage_path(name: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -275,7 +275,9 @@ mod tests {
             .expect("staking should succeed");
 
         assert_eq!(manager.lockup_period(), 7);
-        assert!(manager.unstake_tokens(&validator_address, amount(1)).is_err());
+        assert!(manager
+            .unstake_tokens(&validator_address, amount(1))
+            .is_err());
 
         for _ in 0..manager.lockup_period() {
             manager
@@ -311,8 +313,18 @@ mod tests {
 
         manager.stake(validator.address, amount(6));
         assert_eq!(manager.validator_stake(&validator), amount(6));
-        assert_eq!(manager.staking_epoch_update().expect("epoch should advance"), 1);
-        assert_eq!(manager.staking_epoch_update().expect("epoch should advance"), 2);
+        assert_eq!(
+            manager
+                .staking_epoch_update()
+                .expect("epoch should advance"),
+            1
+        );
+        assert_eq!(
+            manager
+                .staking_epoch_update()
+                .expect("epoch should advance"),
+            2
+        );
     }
 
     #[test]

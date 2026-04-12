@@ -1,4 +1,4 @@
-﻿/// Dependency analysis and conflict detection for parallel transaction execution.
+/// Dependency analysis and conflict detection for parallel transaction execution.
 ///
 /// This module models the dependency graph between transactions in a block,
 /// allowing the scheduler to identify which transactions are safe to execute
@@ -15,12 +15,11 @@
 /// 8  `resolve_cycle` — break cycles by marking txs for re-execution
 /// 9  `deterministic_order` — canonical topological sort (stable, deterministic)
 /// 10 `export` — serialisable snapshot of the graph for debugging
-
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 
-//  item 1: DependencyGraph 
+//  item 1: DependencyGraph
 
 /// A directed acyclic dependency graph over block transactions.
 ///
@@ -77,7 +76,7 @@ impl DependencyGraph {
         }
     }
 
-    //  item 2: record read/write sets 
+    //  item 2: record read/write sets
 
     /// Registers the read/write set for `tx_index`.
     ///
@@ -91,7 +90,7 @@ impl DependencyGraph {
         self.rw_sets.get(&tx_index)
     }
 
-    //  item 3: detect overlapping state keys 
+    //  item 3: detect overlapping state keys
 
     /// Computes all overlapping keys between every pair of recorded transactions
     /// and stores them as `KeyOverlap` records.
@@ -152,7 +151,7 @@ impl DependencyGraph {
         &self.overlaps
     }
 
-    //  item 4: build dependency edges 
+    //  item 4: build dependency edges
 
     /// Builds directed edges from the recorded `KeyOverlap`s.
     ///
@@ -174,15 +173,27 @@ impl DependencyGraph {
 
         for overlap in &self.overlaps {
             let (from, to) = (overlap.tx_a, overlap.tx_b);
-            self.edges.entry(from).or_insert_with(HashSet::new).insert(to);
-            self.predecessors.entry(to).or_insert_with(HashSet::new).insert(from);
+            self.edges
+                .entry(from)
+                .or_insert_with(HashSet::new)
+                .insert(to);
+            self.predecessors
+                .entry(to)
+                .or_insert_with(HashSet::new)
+                .insert(from);
         }
     }
 
     /// Adds a single directed edge `from  to` (to depends on from).
     pub fn add_edge(&mut self, from: usize, to: usize) {
-        self.edges.entry(from).or_insert_with(HashSet::new).insert(to);
-        self.predecessors.entry(to).or_insert_with(HashSet::new).insert(from);
+        self.edges
+            .entry(from)
+            .or_insert_with(HashSet::new)
+            .insert(to);
+        self.predecessors
+            .entry(to)
+            .or_insert_with(HashSet::new)
+            .insert(from);
     }
 
     pub fn edge_count(&self) -> usize {
@@ -190,14 +201,20 @@ impl DependencyGraph {
     }
 
     pub fn successors(&self, tx_index: usize) -> impl Iterator<Item = usize> + '_ {
-        self.edges.get(&tx_index).into_iter().flat_map(|s| s.iter().copied())
+        self.edges
+            .get(&tx_index)
+            .into_iter()
+            .flat_map(|s| s.iter().copied())
     }
 
     pub fn predecessors_of(&self, tx_index: usize) -> impl Iterator<Item = usize> + '_ {
-        self.predecessors.get(&tx_index).into_iter().flat_map(|s| s.iter().copied())
+        self.predecessors
+            .get(&tx_index)
+            .into_iter()
+            .flat_map(|s| s.iter().copied())
     }
 
-    //  item 5: identify independent transactions 
+    //  item 5: identify independent transactions
 
     /// Returns the set of transactions that have **no predecessors** — i.e.
     /// they can begin execution immediately, independently of all others.
@@ -213,11 +230,11 @@ impl DependencyGraph {
                     .unwrap_or(true)
             })
             .collect();
-        result.sort_unstable();   // item 9: deterministic order
+        result.sort_unstable(); // item 9: deterministic order
         result
     }
 
-    //  item 6: parallel execution batches 
+    //  item 6: parallel execution batches
 
     /// Partitions all transactions into an ordered list of **parallel batches**.
     ///
@@ -256,7 +273,7 @@ impl DependencyGraph {
             // Drain the current zero-in-degree frontier  one batch.
             let batch_size = queue.len();
             let mut batch: Vec<usize> = queue.drain(..batch_size).collect();
-            batch.sort_unstable();  // item 9
+            batch.sort_unstable(); // item 9
             placed += batch.len();
 
             // Reduce in-degree for successors.
@@ -287,7 +304,7 @@ impl DependencyGraph {
         Ok(batches)
     }
 
-    //  item 7: detect cyclic dependencies 
+    //  item 7: detect cyclic dependencies
 
     /// Returns all sets of transaction indices that form strongly-connected
     /// components (cycles) in the dependency graph.
@@ -355,7 +372,7 @@ impl DependencyGraph {
         !self.detect_cycles().is_empty()
     }
 
-    //  item 8: resolve cycles via re-execution 
+    //  item 8: resolve cycles via re-execution
 
     /// Breaks all detected cycles by removing the back-edge whose **destination**
     /// has the highest `tx_index` (later transaction loses).  The removed
@@ -399,7 +416,7 @@ impl DependencyGraph {
         &self.reexecution_set
     }
 
-    //  item 9: deterministic dependency order 
+    //  item 9: deterministic dependency order
 
     /// Returns a deterministic total order of all transactions that respects
     /// every dependency edge.
@@ -416,7 +433,7 @@ impl DependencyGraph {
         Ok(batches.into_iter().flatten().collect())
     }
 
-    //  item 10: export dependency graph 
+    //  item 10: export dependency graph
 
     /// Produces a fully serialisable snapshot of the graph for external tooling,
     /// logging, or debugging.
@@ -440,9 +457,7 @@ impl DependencyGraph {
         let mut edges: Vec<EdgeExport> = self
             .edges
             .iter()
-            .flat_map(|(&from, succs)| {
-                succs.iter().map(move |&to| EdgeExport { from, to })
-            })
+            .flat_map(|(&from, succs)| succs.iter().map(move |&to| EdgeExport { from, to }))
             .collect();
         edges.sort_by_key(|e| (e.from, e.to)); // item 9: deterministic export
 
@@ -513,7 +528,7 @@ pub struct OverlapExport {
     pub tx_b: usize,
 }
 
-//  Legacy types & helpers 
+//  Legacy types & helpers
 // Kept verbatim so existing callers (executor, scheduler, commit) continue to compile.
 
 /// The set of storage keys a transaction reads from and writes to.
@@ -525,7 +540,10 @@ pub struct ReadWriteSet {
 
 impl ReadWriteSet {
     pub fn new(read_set: Vec<Vec<u8>>, write_set: Vec<Vec<u8>>) -> Self {
-        Self { read_set, write_set }
+        Self {
+            read_set,
+            write_set,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -541,40 +559,70 @@ impl ReadWriteSet {
     }
 
     pub fn add_read(&mut self, key: Vec<u8>) {
-        if !self.read_set.contains(&key) { self.read_set.push(key); }
+        if !self.read_set.contains(&key) {
+            self.read_set.push(key);
+        }
     }
 
     pub fn add_write(&mut self, key: Vec<u8>) {
-        if !self.write_set.contains(&key) { self.write_set.push(key); }
+        if !self.write_set.contains(&key) {
+            self.write_set.push(key);
+        }
     }
 
     /// RAW: returns keys in read_set that are also in other's write_set.
     pub fn raw_conflicts_with(&self, other: &ReadWriteSet) -> Vec<Vec<u8>> {
         let ws = other.write_set_as_set();
-        self.read_set.iter().filter(|k| ws.contains(k.as_slice())).cloned().collect()
+        self.read_set
+            .iter()
+            .filter(|k| ws.contains(k.as_slice()))
+            .cloned()
+            .collect()
     }
 
     /// WAR / WAW: returns keys in write_set that are also in other's read_set or write_set.
     pub fn war_or_waw_conflicts_with(&self, other: &ReadWriteSet) -> Vec<Vec<u8>> {
         let mut rs = other.read_set_as_set();
         rs.extend(other.write_set_as_set());
-        self.write_set.iter().filter(|k| rs.contains(k.as_slice())).cloned().collect()
+        self.write_set
+            .iter()
+            .filter(|k| rs.contains(k.as_slice()))
+            .cloned()
+            .collect()
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum TransactionConflict {
-    ReadAfterWrite { reader: usize, writer: usize, conflicted_keys: Vec<Vec<u8>> },
-    WriteAfterRead { writer: usize, reader: usize, conflicted_keys: Vec<Vec<u8>> },
-    WriteAfterWrite { first: usize, second: usize, conflicted_keys: Vec<Vec<u8>> },
+    ReadAfterWrite {
+        reader: usize,
+        writer: usize,
+        conflicted_keys: Vec<Vec<u8>>,
+    },
+    WriteAfterRead {
+        writer: usize,
+        reader: usize,
+        conflicted_keys: Vec<Vec<u8>>,
+    },
+    WriteAfterWrite {
+        first: usize,
+        second: usize,
+        conflicted_keys: Vec<Vec<u8>>,
+    },
 }
 
 impl TransactionConflict {
     pub fn conflicted_keys(&self) -> &[Vec<u8>] {
         match self {
-            Self::ReadAfterWrite { conflicted_keys, .. }
-            | Self::WriteAfterRead { conflicted_keys, .. }
-            | Self::WriteAfterWrite { conflicted_keys, .. } => conflicted_keys,
+            Self::ReadAfterWrite {
+                conflicted_keys, ..
+            }
+            | Self::WriteAfterRead {
+                conflicted_keys, ..
+            }
+            | Self::WriteAfterWrite {
+                conflicted_keys, ..
+            } => conflicted_keys,
         }
     }
     pub fn must_execute_first(&self) -> usize {
@@ -607,32 +655,65 @@ pub struct ConflictDetector {
 }
 
 impl ConflictDetector {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn detect_conflicts(&mut self, index: usize, rws: &ReadWriteSet, all_rws: &[ReadWriteSet]) {
         for (other_idx, other) in all_rws.iter().enumerate() {
-            if other_idx <= index { continue; }
+            if other_idx <= index {
+                continue;
+            }
 
             let raw = other.raw_conflicts_with(rws);
             let has_raw = !raw.is_empty();
             if has_raw {
-                let c = TransactionConflict::ReadAfterWrite { reader: other_idx, writer: index, conflicted_keys: raw };
+                let c = TransactionConflict::ReadAfterWrite {
+                    reader: other_idx,
+                    writer: index,
+                    conflicted_keys: raw,
+                };
                 self.conflicts.push(c.clone());
-                self.dependencies.push(Dependency { from: index, to: other_idx, conflict: c });
+                self.dependencies.push(Dependency {
+                    from: index,
+                    to: other_idx,
+                    conflict: c,
+                });
             }
 
             let war = rws.war_or_waw_conflicts_with(other);
             if !war.is_empty() && !has_raw {
-                let c = TransactionConflict::WriteAfterRead { writer: index, reader: other_idx, conflicted_keys: war.clone() };
+                let c = TransactionConflict::WriteAfterRead {
+                    writer: index,
+                    reader: other_idx,
+                    conflicted_keys: war.clone(),
+                };
                 self.conflicts.push(c.clone());
-                self.dependencies.push(Dependency { from: other_idx, to: index, conflict: c });
+                self.dependencies.push(Dependency {
+                    from: other_idx,
+                    to: index,
+                    conflict: c,
+                });
             }
 
-            let waw: Vec<Vec<u8>> = rws.write_set.iter().filter(|k| other.write_set.contains(k)).cloned().collect();
+            let waw: Vec<Vec<u8>> = rws
+                .write_set
+                .iter()
+                .filter(|k| other.write_set.contains(k))
+                .cloned()
+                .collect();
             if !waw.is_empty() {
-                let c = TransactionConflict::WriteAfterWrite { first: other_idx, second: index, conflicted_keys: waw };
+                let c = TransactionConflict::WriteAfterWrite {
+                    first: other_idx,
+                    second: index,
+                    conflicted_keys: waw,
+                };
                 self.conflicts.push(c.clone());
-                self.dependencies.push(Dependency { from: other_idx, to: index, conflict: c });
+                self.dependencies.push(Dependency {
+                    from: other_idx,
+                    to: index,
+                    conflict: c,
+                });
             }
         }
     }
@@ -653,7 +734,10 @@ impl DependencyAnalyzer {
         Ok(graph)
     }
 
-    pub fn topological_sort(graph: &HashMap<usize, Vec<usize>>, total_tx: usize) -> Result<Vec<usize>> {
+    pub fn topological_sort(
+        graph: &HashMap<usize, Vec<usize>>,
+        total_tx: usize,
+    ) -> Result<Vec<usize>> {
         let mut in_degree = vec![0usize; total_tx];
         for tx_idx in 0..total_tx {
             if let Some(preds) = graph.get(&tx_idx) {
@@ -669,7 +753,9 @@ impl DependencyAnalyzer {
             for (dependent, preds) in graph.iter() {
                 if preds.contains(&tx_idx) {
                     in_degree[*dependent] -= 1;
-                    if in_degree[*dependent] == 0 { queue.push(*dependent); }
+                    if in_degree[*dependent] == 0 {
+                        queue.push(*dependent);
+                    }
                 }
             }
         }
@@ -687,9 +773,13 @@ impl DependencyAnalyzer {
     ) -> Result<Vec<usize>> {
         let mut batch = Vec::new();
         for tx_idx in 0..total_tx {
-            if executed.contains(&tx_idx) { continue; }
+            if executed.contains(&tx_idx) {
+                continue;
+            }
             if let Some(preds) = graph.get(&tx_idx) {
-                if preds.iter().all(|&p| executed.contains(&p)) { batch.push(tx_idx); }
+                if preds.iter().all(|&p| executed.contains(&p)) {
+                    batch.push(tx_idx);
+                }
             } else {
                 batch.push(tx_idx);
             }
@@ -698,7 +788,7 @@ impl DependencyAnalyzer {
     }
 }
 
-//  Tests 
+//  Tests
 
 #[cfg(test)]
 mod tests {
@@ -711,7 +801,7 @@ mod tests {
         )
     }
 
-    //  item 1 
+    //  item 1
 
     #[test]
     fn dependency_graph_new() {
@@ -720,7 +810,7 @@ mod tests {
         assert_eq!(g.edge_count(), 0);
     }
 
-    //  item 2 
+    //  item 2
 
     #[test]
     fn record_rw_set_stores_entries() {
@@ -738,7 +828,7 @@ mod tests {
         assert_eq!(g.total_tx, 8);
     }
 
-    //  item 3 
+    //  item 3
 
     #[test]
     fn detect_overlaps_finds_raw() {
@@ -746,7 +836,10 @@ mod tests {
         g.record_rw_set(0, rws(&[], &[b"x"]));
         g.record_rw_set(1, rws(&[b"x"], &[]));
         g.detect_overlaps();
-        assert!(g.overlaps().iter().any(|o| o.overlap_type == OverlapType::ReadAfterWrite));
+        assert!(g
+            .overlaps()
+            .iter()
+            .any(|o| o.overlap_type == OverlapType::ReadAfterWrite));
     }
 
     #[test]
@@ -755,7 +848,10 @@ mod tests {
         g.record_rw_set(0, rws(&[], &[b"x"]));
         g.record_rw_set(1, rws(&[], &[b"x"]));
         g.detect_overlaps();
-        assert!(g.overlaps().iter().any(|o| o.overlap_type == OverlapType::WriteAfterWrite));
+        assert!(g
+            .overlaps()
+            .iter()
+            .any(|o| o.overlap_type == OverlapType::WriteAfterWrite));
     }
 
     #[test]
@@ -767,7 +863,7 @@ mod tests {
         assert!(g.overlaps().is_empty());
     }
 
-    //  item 4 
+    //  item 4
 
     #[test]
     fn build_edges_creates_dependency() {
@@ -790,7 +886,7 @@ mod tests {
         assert_eq!(g.edge_count(), 0);
     }
 
-    //  item 5 
+    //  item 5
 
     #[test]
     fn independent_transactions_no_deps() {
@@ -815,7 +911,7 @@ mod tests {
         assert_eq!(ind, vec![0]);
     }
 
-    //  item 6 
+    //  item 6
 
     #[test]
     fn parallel_batches_chain() {
@@ -861,7 +957,7 @@ mod tests {
         assert_eq!(batches[2], vec![3]);
     }
 
-    //  item 7 
+    //  item 7
 
     #[test]
     fn detect_cycles_acyclic_graph() {
@@ -888,7 +984,7 @@ mod tests {
         assert!(!cycles.is_empty());
     }
 
-    //  item 8 
+    //  item 8
 
     #[test]
     fn resolve_cycles_breaks_cycle() {
@@ -918,7 +1014,7 @@ mod tests {
         assert!(!g.has_cycle());
     }
 
-    //  item 9 
+    //  item 9
 
     #[test]
     fn deterministic_order_stable() {
@@ -949,12 +1045,14 @@ mod tests {
         assert!(pos[&1] < pos[&2]);
     }
 
-    //  item 10 
+    //  item 10
 
     #[test]
     fn export_contains_all_nodes() {
         let mut g = DependencyGraph::new(3);
-        for i in 0..3 { g.record_rw_set(i, rws(&[], &[&[i as u8]])); }
+        for i in 0..3 {
+            g.record_rw_set(i, rws(&[], &[&[i as u8]]));
+        }
         g.detect_overlaps();
         g.build_edges();
         let exp = g.export();
@@ -988,7 +1086,7 @@ mod tests {
         assert!(!node1.is_independent);
     }
 
-    //  Legacy helpers 
+    //  Legacy helpers
 
     #[test]
     fn read_write_set_conflict_detection() {
@@ -1006,7 +1104,12 @@ mod tests {
         ];
         let graph = DependencyAnalyzer::analyze(&list).unwrap();
         assert!(graph.is_empty());
-        assert_eq!(DependencyAnalyzer::topological_sort(&graph, 2).unwrap().len(), 2);
+        assert_eq!(
+            DependencyAnalyzer::topological_sort(&graph, 2)
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     #[test]

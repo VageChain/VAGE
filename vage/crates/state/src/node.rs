@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Result};
+use serde::{Deserialize, Serialize};
 use vage_crypto::hash::domain_hash;
 use vage_types::Canonical;
-use serde::{Deserialize, Serialize};
 
 const VERKLE_BRANCHING_FACTOR: usize = 256;
 const DOMAIN_VERKLE_COMMITMENT: &str = "VAGE_VERKLE_COMMITMENT";
@@ -54,20 +54,26 @@ impl VerkleNode {
     }
 
     pub fn set_child(&mut self, index: usize, node: VerkleNode) -> Result<Option<VerkleNode>> {
-        let slot = self
-            .children
-            .get_mut(index)
-            .ok_or_else(|| anyhow!("child index out of bounds: {} (max {})", index, VERKLE_BRANCHING_FACTOR))?;
+        let slot = self.children.get_mut(index).ok_or_else(|| {
+            anyhow!(
+                "child index out of bounds: {} (max {})",
+                index,
+                VERKLE_BRANCHING_FACTOR
+            )
+        })?;
         let previous = slot.replace(Box::new(node)).map(|boxed| *boxed);
         self.refresh_commitment();
         Ok(previous)
     }
 
     pub fn remove_child(&mut self, index: usize) -> Result<Option<VerkleNode>> {
-        let slot = self
-            .children
-            .get_mut(index)
-            .ok_or_else(|| anyhow!("child index out of bounds: {} (max {})", index, VERKLE_BRANCHING_FACTOR))?;
+        let slot = self.children.get_mut(index).ok_or_else(|| {
+            anyhow!(
+                "child index out of bounds: {} (max {})",
+                index,
+                VERKLE_BRANCHING_FACTOR
+            )
+        })?;
         let removed = slot.take().map(|boxed| *boxed);
         self.refresh_commitment();
         Ok(removed)
@@ -233,12 +239,18 @@ mod tests {
         let original_commitment = root.commitment();
         let child = VerkleNode::new_internal(1);
 
-        assert!(root.set_child(7, child).expect("set_child should succeed").is_none());
+        assert!(root
+            .set_child(7, child)
+            .expect("set_child should succeed")
+            .is_none());
         assert!(root.child(7).is_some());
         assert_eq!(root.children_count(), 1);
         assert_ne!(root.commitment(), original_commitment);
 
-        let removed = root.remove_child(7).expect("remove_child should succeed").expect("child should exist");
+        let removed = root
+            .remove_child(7)
+            .expect("remove_child should succeed")
+            .expect("child should exist");
         assert_eq!(removed.depth, 1);
         assert!(root.child(7).is_none());
         assert_eq!(root.children_count(), 0);

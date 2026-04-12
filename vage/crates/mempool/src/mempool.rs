@@ -4,16 +4,16 @@ use crate::validation::{TransactionValidator, TxValidationConfig, MAX_TX_SIZE};
 use anyhow::Result;
 use parking_lot::{Mutex, RwLock};
 use primitive_types::U256;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::info;
 use vage_block::Block;
 use vage_execution::TransactionSource;
 use vage_networking::{GossipMessage, TransactionPoolSink};
 use vage_state::StateDb;
 use vage_storage::StorageEngine;
 use vage_types::{Hash, Transaction};
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::info;
 
 pub const MAX_MEMPOOL_SIZE: usize = 10_000;
 
@@ -459,16 +459,15 @@ impl Mempool {
 
         let mut tracker = self.gossip_tracker.lock();
 
-        if tracker.received_from_peers.contains(&tx_hash)
-            || tracker.broadcasted.contains(&tx_hash)
+        if tracker.received_from_peers.contains(&tx_hash) || tracker.broadcasted.contains(&tx_hash)
         {
             return Ok(None);
         }
 
         tracker.broadcasted.insert(tx_hash);
-        Ok(Some(GossipMessage::Transaction(
-            bincode::serialize(&transaction)?,
-        )))
+        Ok(Some(GossipMessage::Transaction(bincode::serialize(
+            &transaction,
+        )?)))
     }
 
     // ── Spam-prevention helpers ───────────────────────────────────────────────
@@ -505,16 +504,13 @@ impl Mempool {
         let now = unix_timestamp();
         let mut tracker = self.gossip_tracker.lock();
         let sender = *tx.from.as_bytes();
-        let bucket = tracker
-            .sender_buckets
-            .entry(sender)
-            .or_insert_with(|| {
-                TokenBucket::new(
-                    self.config.max_transactions_per_sender_per_window,
-                    self.config.sender_rate_limit_window_secs,
-                    now,
-                )
-            });
+        let bucket = tracker.sender_buckets.entry(sender).or_insert_with(|| {
+            TokenBucket::new(
+                self.config.max_transactions_per_sender_per_window,
+                self.config.sender_rate_limit_window_secs,
+                now,
+            )
+        });
 
         if !bucket.try_consume(now) {
             anyhow::bail!(
@@ -645,10 +641,7 @@ impl Mempool {
 
     /// Remove all transactions that were included in a committed block from both
     /// the in-memory pool and the durable storage backend.
-    pub fn remove_transactions_after_block_commit(
-        &self,
-        block: &Block,
-    ) -> Result<()> {
+    pub fn remove_transactions_after_block_commit(&self, block: &Block) -> Result<()> {
         let hashes: Vec<Hash> = block.body.transactions.iter().map(|tx| tx.hash()).collect();
         let mut pool = self.pool.write();
         pool.remove_many(&hashes);

@@ -9,7 +9,6 @@
 ///
 /// The outcome is a permutation of transactions free of conflicts, executed faster
 /// than serial execution.
-
 pub mod commit;
 pub mod dependency;
 pub mod executor;
@@ -27,19 +26,21 @@ pub use crate::parallel::dependency::{
 };
 pub use crate::parallel::executor::{
     BatchExecutionResult, BatchResult, BlockExecutionPipeline, ConflictDetail, ConflictKind,
-    ConflictResolution, ConflictResolutionPolicy, ConflictResolver,
-    DeterministicExecutionGuard, ExecutionContext, ExecutionContextPool, ExecutionMetrics,
-    ExecutionOutput, FinalizedBlockOutput, HotAccountCache, MetricsSnapshot,
-    OrderedCommitQueue, ParallelExecutionConfig, ParallelExecutionResult,
-    ParallelExecutor, ParallelExecutorTask, PipelineConfig, RawOutcome, SpeculativeWrites,
-    StateConsistencyChecker, StateKeyPrefetcher, TransactionExecutionResult,
-    TxExecutionOutcome, WriteBatch,
+    ConflictResolution, ConflictResolutionPolicy, ConflictResolver, DeterministicExecutionGuard,
+    ExecutionContext, ExecutionContextPool, ExecutionMetrics, ExecutionOutput,
+    FinalizedBlockOutput, HotAccountCache, MetricsSnapshot, OrderedCommitQueue,
+    ParallelExecutionConfig, ParallelExecutionResult, ParallelExecutor, ParallelExecutorTask,
+    PipelineConfig, RawOutcome, SpeculativeWrites, StateConsistencyChecker, StateKeyPrefetcher,
+    TransactionExecutionResult, TxExecutionOutcome, WriteBatch,
 };
 pub use crate::parallel::mv_memory::{
     MVMemory, MVMemoryConfig, ReadRecord, Snapshot, SnapshotId, SpeculativeState, TxVersion,
     VersionStatus, VersionedMemory,
 };
-pub use crate::parallel::scheduler::{BlockScheduler, BlockSchedulerConfig, CommitNotification, ExecutionBatch, ExecutionSchedule, ExecutionTask, Scheduler, SchedulingStrategy, TaskStatus};
+pub use crate::parallel::scheduler::{
+    BlockScheduler, BlockSchedulerConfig, CommitNotification, ExecutionBatch, ExecutionSchedule,
+    ExecutionTask, Scheduler, SchedulingStrategy, TaskStatus,
+};
 
 #[derive(Clone, Debug)]
 pub enum ParallelExecutionStrategy {

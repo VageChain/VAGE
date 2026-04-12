@@ -1,14 +1,16 @@
 use anyhow::{bail, Result};
 use ed25519_dalek::{Signer, SigningKey};
-use vage_crypto::bls::{aggregate_public_keys, aggregate_votes, verify_quorum_certificate, BlsPublicKey, BlsSignature};
-use vage_crypto::hash::{domain_hash, DOMAIN_CONSENSUS};
-use vage_types::{Address, Validator};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use vage_crypto::bls::{
+    aggregate_public_keys, aggregate_votes, verify_quorum_certificate, BlsPublicKey, BlsSignature,
+};
+use vage_crypto::hash::{domain_hash, DOMAIN_CONSENSUS};
+use vage_types::{Address, Validator};
 
 mod serde_sig {
-    use serde::{Deserializer, Serializer};
     use serde::de::Error;
+    use serde::{Deserializer, Serializer};
     pub fn serialize<S>(sig: &[u8; 64], serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -20,7 +22,9 @@ mod serde_sig {
         D: Deserializer<'de>,
     {
         let bytes: Vec<u8> = serde::Deserialize::deserialize(deserializer)?;
-        bytes.try_into().map_err(|_| Error::custom("expected 64 bytes"))
+        bytes
+            .try_into()
+            .map_err(|_| Error::custom("expected 64 bytes"))
     }
 }
 
@@ -365,10 +369,14 @@ mod tests {
             vec![vote.validator],
         );
 
-        assert!(!qc.verify(&[validator.clone()], 2).expect("threshold check should run"));
+        assert!(!qc
+            .verify(&[validator.clone()], 2)
+            .expect("threshold check should run"));
 
         let other_validator = validator_from_signing_key(&signing_key(7));
-        assert!(!qc.verify(&[other_validator], 1).expect("validator lookup should run"));
+        assert!(!qc
+            .verify(&[other_validator], 1)
+            .expect("validator lookup should run"));
     }
 
     #[test]
@@ -382,7 +390,8 @@ mod tests {
         assert_eq!(vote.view, 9);
         assert_eq!(vote.signature, [0u8; 64]);
 
-        vote.sign(&signing_key).expect("vote signing should succeed");
+        vote.sign(&signing_key)
+            .expect("vote signing should succeed");
         assert!(vote
             .verify_signature(&validator)
             .expect("vote verification should succeed"));
@@ -401,7 +410,8 @@ mod tests {
         let signing_key = signing_key(4);
         let validator = validator_from_signing_key(&signing_key);
         let mut vote = Vote::new(validator.address, [8u8; 32], 6);
-        vote.sign(&signing_key).expect("vote signing should succeed");
+        vote.sign(&signing_key)
+            .expect("vote signing should succeed");
 
         let mut collector = VoteCollector::new();
         collector
@@ -428,7 +438,9 @@ mod tests {
         assert_eq!(qc.validators, vec![validator.address]);
         assert_eq!(qc.signatures, vec![vote.signature.to_vec()]);
 
-        assert!(collector.build_quorum_certificate(6, [8u8; 32], 2).is_none());
+        assert!(collector
+            .build_quorum_certificate(6, [8u8; 32], 2)
+            .is_none());
     }
 
     #[test]
@@ -457,7 +469,8 @@ mod tests {
         let signing_key = signing_key(1);
         let validator = validator_from_signing_key(&signing_key);
         let mut vote = Vote::new(validator.address, [7u8; 32], 4);
-        vote.sign(&signing_key).expect("vote signing should succeed");
+        vote.sign(&signing_key)
+            .expect("vote signing should succeed");
 
         let qc = QuorumCertificate::new(
             vote.block_hash,
@@ -466,7 +479,9 @@ mod tests {
             vec![vote.validator],
         );
 
-        assert!(qc.verify(&[validator], 1).expect("qc verification should succeed"));
+        assert!(qc
+            .verify(&[validator], 1)
+            .expect("qc verification should succeed"));
     }
 
     #[test]
@@ -474,7 +489,8 @@ mod tests {
         let signing_key = signing_key(2);
         let validator = validator_from_signing_key(&signing_key);
         let mut vote = Vote::new(validator.address, [9u8; 32], 2);
-        vote.sign(&signing_key).expect("vote signing should succeed");
+        vote.sign(&signing_key)
+            .expect("vote signing should succeed");
 
         let qc = QuorumCertificate::new(
             vote.block_hash,
@@ -483,7 +499,9 @@ mod tests {
             vec![vote.validator, vote.validator],
         );
 
-        assert!(!qc.verify(&[validator.clone()], 2).expect("qc verification should succeed"));
+        assert!(!qc
+            .verify(&[validator.clone()], 2)
+            .expect("qc verification should succeed"));
         assert!(!qc
             .verify_with_voting_power(&[validator], 2, 2)
             .expect("voting power verification should succeed"));
@@ -494,8 +512,10 @@ mod tests {
         let (sk1, pk1) = bls_generate_keypair();
         let (sk2, pk2) = bls_generate_keypair();
         let block_hash = [11u8; 32];
-        let sig1 = validator_vote_signature(&sk1, &block_hash).expect("vote signature should succeed");
-        let sig2 = validator_vote_signature(&sk2, &block_hash).expect("vote signature should succeed");
+        let sig1 =
+            validator_vote_signature(&sk1, &block_hash).expect("vote signature should succeed");
+        let sig2 =
+            validator_vote_signature(&sk2, &block_hash).expect("vote signature should succeed");
         let qc = QuorumCertificate::new(
             block_hash,
             3,
@@ -506,7 +526,10 @@ mod tests {
         assert!(qc
             .verify_bls_aggregate_signature(&[pk1, pk2])
             .expect("bls aggregate verification should succeed"));
-        assert!(!qc.aggregate_bls_signatures().expect("bls aggregation should succeed").is_empty());
+        assert!(!qc
+            .aggregate_bls_signatures()
+            .expect("bls aggregation should succeed")
+            .is_empty());
     }
 
     #[test]
@@ -514,10 +537,13 @@ mod tests {
         let signing_key = signing_key(3);
         let validator = validator_from_signing_key(&signing_key);
         let mut vote = Vote::new(validator.address, [5u8; 32], 8);
-        vote.sign(&signing_key).expect("vote signing should succeed");
+        vote.sign(&signing_key)
+            .expect("vote signing should succeed");
 
         let mut collector = VoteCollector::new();
-        collector.add_vote(vote).expect("vote insert should succeed");
+        collector
+            .add_vote(vote)
+            .expect("vote insert should succeed");
         let qc = collector
             .build_quorum_certificate(8, [5u8; 32], 1)
             .expect("qc should be built");

@@ -1,8 +1,8 @@
-use serde_json::{Value, json};
-use std::sync::Arc;
 use crate::context::RpcContext;
 use crate::error::RpcError;
 use primitive_types::U256;
+use serde_json::{json, Value};
+use std::sync::Arc;
 use vage_types::Address;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,38 +75,63 @@ pub async fn handle_state_method(
     }
 }
 
-async fn get_balance_internal(address: Address, context: &Arc<RpcContext>) -> Result<U256, RpcError> {
-    context.state().get_balance(&address)
+async fn get_balance_internal(
+    address: Address,
+    context: &Arc<RpcContext>,
+) -> Result<U256, RpcError> {
+    context
+        .state()
+        .get_balance(&address)
         .map_err(|e| RpcError::InternalError(format!("failed to fetch balance: {}", e)))
 }
 
-async fn get_account_internal(address: Address, context: &Arc<RpcContext>) -> Result<Option<Value>, RpcError> {
-    let account = context.state().get_account(&address)
+async fn get_account_internal(
+    address: Address,
+    context: &Arc<RpcContext>,
+) -> Result<Option<Value>, RpcError> {
+    let account = context
+        .state()
+        .get_account(&address)
         .map_err(|e| RpcError::InternalError(format!("failed to fetch account: {}", e)))?;
     Ok(account.map(|a| json!(a)))
 }
 
 async fn get_nonce_internal(address: Address, context: &Arc<RpcContext>) -> Result<u64, RpcError> {
-    context.state().get_nonce(&address)
+    context
+        .state()
+        .get_nonce(&address)
         .map_err(|e| RpcError::InternalError(format!("failed to fetch nonce: {}", e)))
 }
 
-async fn get_storage_internal(address: Address, key: [u8; 32], context: &Arc<RpcContext>) -> Result<String, RpcError> {
-    let value = context.state().get_storage(&address, key)
+async fn get_storage_internal(
+    address: Address,
+    key: [u8; 32],
+    context: &Arc<RpcContext>,
+) -> Result<String, RpcError> {
+    let value = context
+        .state()
+        .get_storage(&address, key)
         .map_err(|e| RpcError::InternalError(format!("failed to fetch storage: {}", e)))?;
-    
-    Ok(value.map(|v| hex::encode(v)).unwrap_or_else(|| "0x0000".to_string()))
+
+    Ok(value
+        .map(|v| hex::encode(v))
+        .unwrap_or_else(|| "0x0000".to_string()))
 }
 
 async fn get_state_root_internal(context: &Arc<RpcContext>) -> Result<[u8; 32], RpcError> {
     Ok(context.state().state_root())
 }
 
-async fn get_proof_internal(request: ProofRequest, context: &Arc<RpcContext>) -> Result<Value, RpcError> {
+async fn get_proof_internal(
+    request: ProofRequest,
+    context: &Arc<RpcContext>,
+) -> Result<Value, RpcError> {
     let state = context.state();
     let proof = match request.kind {
         ProofKind::Account => {
-            let address = request.address.ok_or_else(|| RpcError::InvalidParams("missing address for account proof".into()))?;
+            let address = request.address.ok_or_else(|| {
+                RpcError::InvalidParams("missing address for account proof".into())
+            })?;
             if request.minimal {
                 state.export_minimal_proof_for_rpc(*address.as_bytes())
             } else {
@@ -114,8 +139,12 @@ async fn get_proof_internal(request: ProofRequest, context: &Arc<RpcContext>) ->
             }
         }
         ProofKind::Storage => {
-            let address = request.address.ok_or_else(|| RpcError::InvalidParams("missing address for storage proof".into()))?;
-            let key = request.key.ok_or_else(|| RpcError::InvalidParams("missing storage key for storage proof".into()))?;
+            let address = request.address.ok_or_else(|| {
+                RpcError::InvalidParams("missing address for storage proof".into())
+            })?;
+            let key = request.key.ok_or_else(|| {
+                RpcError::InvalidParams("missing storage key for storage proof".into())
+            })?;
             if request.minimal {
                 state.export_minimal_proof_for_rpc(vage_state::storage_proof_key(&address, &key))
             } else {
@@ -123,7 +152,9 @@ async fn get_proof_internal(request: ProofRequest, context: &Arc<RpcContext>) ->
             }
         }
         ProofKind::Minimal => {
-            let key = request.key.ok_or_else(|| RpcError::InvalidParams("missing key for minimal proof".into()))?;
+            let key = request
+                .key
+                .ok_or_else(|| RpcError::InvalidParams("missing key for minimal proof".into()))?;
             state.export_minimal_proof_for_rpc(key)
         }
     }
@@ -132,10 +163,15 @@ async fn get_proof_internal(request: ProofRequest, context: &Arc<RpcContext>) ->
     Ok(json!(proof))
 }
 
-async fn get_contract_code_internal(address: Address, context: &Arc<RpcContext>) -> Result<String, RpcError> {
-    let account = context.state().get_account(&address)
+async fn get_contract_code_internal(
+    address: Address,
+    context: &Arc<RpcContext>,
+) -> Result<String, RpcError> {
+    let account = context
+        .state()
+        .get_account(&address)
         .map_err(|e| RpcError::InternalError(format!("failed to fetch account for code: {}", e)))?;
-    
+
     if let Some(account) = account {
         if account.is_contract() {
             // In a real implementation, we would look up the actual bytecode using account.code_hash.
@@ -143,28 +179,44 @@ async fn get_contract_code_internal(address: Address, context: &Arc<RpcContext>)
             return Ok(hex::encode(account.code_hash));
         }
     }
-    
+
     Ok("0x".to_string())
 }
 
 // --- Parameter Parsers ---
 
 fn parse_address_param(params: Option<Value>) -> Result<Address, RpcError> {
-    let val = params.and_then(|v| {
-        if v.is_array() { v.get(0).cloned() } else { Some(v) }
-    }).ok_or_else(|| RpcError::InvalidParams("missing address parameter".into()))?;
+    let val = params
+        .and_then(|v| {
+            if v.is_array() {
+                v.get(0).cloned()
+            } else {
+                Some(v)
+            }
+        })
+        .ok_or_else(|| RpcError::InvalidParams("missing address parameter".into()))?;
 
-    let s = val.as_str().ok_or_else(|| RpcError::InvalidParams("address must be a string".into()))?;
+    let s = val
+        .as_str()
+        .ok_or_else(|| RpcError::InvalidParams("address must be a string".into()))?;
     Address::from_str_ext(s)
 }
 
 fn parse_address_and_key_params(params: Option<Value>) -> Result<(Address, [u8; 32]), RpcError> {
     let params = params.ok_or_else(|| RpcError::InvalidParams("missing parameters".into()))?;
-    if !params.is_array() { return Err(RpcError::InvalidParams("parameters must be an array".into())); }
-    
-    let addr_str = params.get(0).and_then(|v| v.as_str())
+    if !params.is_array() {
+        return Err(RpcError::InvalidParams(
+            "parameters must be an array".into(),
+        ));
+    }
+
+    let addr_str = params
+        .get(0)
+        .and_then(|v| v.as_str())
         .ok_or_else(|| RpcError::InvalidParams("missing/invalid address".into()))?;
-    let key_str = params.get(1).and_then(|v| v.as_str())
+    let key_str = params
+        .get(1)
+        .and_then(|v| v.as_str())
         .ok_or_else(|| RpcError::InvalidParams("missing/invalid storage key".into()))?;
 
     let address = Address::from_str_ext(addr_str)?;
@@ -176,7 +228,10 @@ fn parse_address_and_key_params(params: Option<Value>) -> Result<(Address, [u8; 
     Ok((address, key))
 }
 
-fn parse_proof_params(params: Option<Value>, default_kind: ProofKind) -> Result<ProofRequest, RpcError> {
+fn parse_proof_params(
+    params: Option<Value>,
+    default_kind: ProofKind,
+) -> Result<ProofRequest, RpcError> {
     match params {
         None => Err(RpcError::InvalidParams("missing proof parameters".into())),
         Some(Value::String(address)) => Ok(ProofRequest {
@@ -191,7 +246,12 @@ fn parse_proof_params(params: Option<Value>, default_kind: ProofKind) -> Result<
                 Some("account") => ProofKind::Account,
                 Some("storage") => ProofKind::Storage,
                 Some("minimal") => ProofKind::Minimal,
-                Some(other) => return Err(RpcError::InvalidParams(format!("unsupported proof type: {}", other))),
+                Some(other) => {
+                    return Err(RpcError::InvalidParams(format!(
+                        "unsupported proof type: {}",
+                        other
+                    )))
+                }
                 None => default_kind,
             };
 
@@ -201,7 +261,10 @@ fn parse_proof_params(params: Option<Value>, default_kind: ProofKind) -> Result<
                 .map(Address::from_str_ext)
                 .transpose()?;
             let key = map.get("key").map(parse_hex_key_value).transpose()?;
-            let minimal = map.get("minimal").and_then(|v| v.as_bool()).unwrap_or(matches!(kind, ProofKind::Minimal));
+            let minimal = map
+                .get("minimal")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(matches!(kind, ProofKind::Minimal));
 
             Ok(ProofRequest {
                 kind,
@@ -210,11 +273,16 @@ fn parse_proof_params(params: Option<Value>, default_kind: ProofKind) -> Result<
                 minimal,
             })
         }
-        Some(_) => Err(RpcError::InvalidParams("unsupported proof parameter format".into())),
+        Some(_) => Err(RpcError::InvalidParams(
+            "unsupported proof parameter format".into(),
+        )),
     }
 }
 
-fn parse_proof_params_from_array(items: Vec<Value>, default_kind: ProofKind) -> Result<ProofRequest, RpcError> {
+fn parse_proof_params_from_array(
+    items: Vec<Value>,
+    default_kind: ProofKind,
+) -> Result<ProofRequest, RpcError> {
     match default_kind {
         ProofKind::Account => {
             let address = items
@@ -294,7 +362,9 @@ trait CopyToSliceExt {
 impl CopyToSliceExt for Vec<u8> {
     fn copy_to_slice_ext(self, target: &mut [u8; 32]) -> Result<(), RpcError> {
         if self.len() != 32 {
-            return Err(RpcError::InvalidParams("invalid key length; expected 32 bytes".into()));
+            return Err(RpcError::InvalidParams(
+                "invalid key length; expected 32 bytes".into(),
+            ));
         }
         target.copy_from_slice(&self);
         Ok(())

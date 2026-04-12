@@ -1,11 +1,11 @@
 use anyhow::Result;
+use tracing::{info, warn};
 use vage_block::Block;
-use vage_state::{VerkleProof, RpcVerkleProof};
+use vage_state::{RpcVerkleProof, VerkleProof};
 use vage_types::{Account, Address, BlockHeight};
 use vage_zk::{ZkEngine, ZkPublicInputs};
-use tracing::{info, warn};
 
-/// A utility for light clients to verify cryptographic proofs of state inclusion 
+/// A utility for light clients to verify cryptographic proofs of state inclusion
 /// against a verified block header root.
 pub struct ProofVerifier;
 
@@ -17,7 +17,11 @@ impl ProofVerifier {
         value: [u8; 32],
         root_hash: [u8; 32],
     ) -> Result<bool> {
-        info!("Verifying Verkle inclusion proof for key 0x{} against root 0x{}", hex::encode(key), hex::encode(root_hash));
+        info!(
+            "Verifying Verkle inclusion proof for key 0x{} against root 0x{}",
+            hex::encode(key),
+            hex::encode(root_hash)
+        );
         proof.verify_proof(key, value, root_hash)
     }
 
@@ -28,7 +32,11 @@ impl ProofVerifier {
         account: &Account,
         root_hash: [u8; 32],
     ) -> Result<bool> {
-        info!("Verifying account state proof for address {} against root 0x{}", address, hex::encode(root_hash));
+        info!(
+            "Verifying account state proof for address {} against root 0x{}",
+            address,
+            hex::encode(root_hash)
+        );
         proof.verify_account_proof(address, account, root_hash)
     }
 
@@ -41,8 +49,10 @@ impl ProofVerifier {
         root_hash: [u8; 32],
     ) -> Result<bool> {
         info!(
-            "Verifying storage proof for contract {} at key 0x{} against root 0x{}", 
-            address, hex::encode(storage_key), hex::encode(root_hash)
+            "Verifying storage proof for contract {} at key 0x{} against root 0x{}",
+            address,
+            hex::encode(storage_key),
+            hex::encode(root_hash)
         );
         proof.verify_storage_proof(address, storage_key, storage_value, root_hash)
     }
@@ -53,7 +63,11 @@ impl ProofVerifier {
         key: [u8; 32],
         value: [u8; 32],
     ) -> Result<bool> {
-        info!("Verifying RPC-format Verkle proof for key 0x{} against proof root 0x{}", hex::encode(key), hex::encode(rpc_proof.root));
+        info!(
+            "Verifying RPC-format Verkle proof for key 0x{} against proof root 0x{}",
+            hex::encode(key),
+            hex::encode(rpc_proof.root)
+        );
         VerkleProof::verify_for_light_client(rpc_proof, key, value)
     }
 
@@ -115,7 +129,7 @@ impl ProofVerifier {
             warn!("Proof validation failed at block height {}", height);
             return Ok(false);
         }
-        
+
         info!("Proof successfully validated for block height {}", height);
         Ok(true)
     }
@@ -200,10 +214,7 @@ impl ProofVerifier {
     /// Item 20 â€” Construct the `ZkPublicInputs` the light client expects for a
     /// given block so it can be compared against the proof's committed inputs
     /// without re-running the prover.
-    pub fn expected_public_inputs(
-        block: &Block,
-        state_root_before: [u8; 32],
-    ) -> ZkPublicInputs {
+    pub fn expected_public_inputs(block: &Block, state_root_before: [u8; 32]) -> ZkPublicInputs {
         ZkPublicInputs::new(state_root_before, block.header.state_root, block.hash())
     }
 }
@@ -230,8 +241,10 @@ mod tests {
             .expect("account proof generation should succeed")
             .export_for_rpc(tree.root_commitment());
 
-        assert!(ProofVerifier::verify_rpc_account_proof(&proof, &address, &account)
-            .expect("rpc account proof verification should succeed"));
+        assert!(
+            ProofVerifier::verify_rpc_account_proof(&proof, &address, &account)
+                .expect("rpc account proof verification should succeed")
+        );
     }
 
     #[test]
@@ -247,8 +260,13 @@ mod tests {
             .expect("storage proof generation should succeed")
             .export_for_rpc(tree.root_commitment());
 
-        assert!(ProofVerifier::verify_rpc_storage_proof(&proof, &address, storage_key, storage_value)
-            .expect("rpc storage proof verification should succeed"));
+        assert!(ProofVerifier::verify_rpc_storage_proof(
+            &proof,
+            &address,
+            storage_key,
+            storage_value
+        )
+        .expect("rpc storage proof verification should succeed"));
     }
 
     #[test]

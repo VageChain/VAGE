@@ -4,23 +4,29 @@ use crate::pos::staking::StakingManager;
 use crate::pos::validator_set::ValidatorSet;
 use anyhow::{anyhow, bail, Result};
 use primitive_types::U256;
-use vage_storage::StorageEngine;
-use vage_types::{Address, Validator};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
+use vage_storage::StorageEngine;
+use vage_types::{Address, Validator};
 
 // â”€â”€ custom serde for [u8; 64] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 mod serde_sig64 {
     use serde::{de::Error, Deserializer, Serializer};
     pub fn serialize<S>(sig: &[u8; 64], s: S) -> Result<S::Ok, S::Error>
-    where S: Serializer { s.serialize_bytes(sig.as_slice()) }
+    where
+        S: Serializer,
+    {
+        s.serialize_bytes(sig.as_slice())
+    }
     pub fn deserialize<'de, D>(d: D) -> Result<[u8; 64], D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         let v: Vec<u8> = serde::Deserialize::deserialize(d)?;
         v.try_into().map_err(|_| Error::custom("expected 64 bytes"))
     }
@@ -49,10 +55,7 @@ pub enum Misbehavior {
         proposal_b: Vec<u8>,
     },
     /// item 4: validator submitted a vote with an invalid signature.
-    InvalidSignature {
-        vote: Vote,
-        reason: String,
-    },
+    InvalidSignature { vote: Vote, reason: String },
 }
 
 impl Misbehavior {
@@ -189,10 +192,10 @@ pub struct SlashingConfig {
 impl Default for SlashingConfig {
     fn default() -> Self {
         Self {
-            double_vote_slash_bps: 500,      // 5%
-            double_proposal_slash_bps: 200,  // 2%
-            invalid_sig_slash_bps: 100,      // 1%
-            burn_fraction_bps: 8_000,        // 80% burned
+            double_vote_slash_bps: 500,     // 5%
+            double_proposal_slash_bps: 200, // 2%
+            invalid_sig_slash_bps: 100,     // 1%
+            burn_fraction_bps: 8_000,       // 80% burned
             cooldown_blocks: 1_000,
         }
     }
@@ -236,16 +239,16 @@ pub struct SlashingManager {
 
 impl SlashingManager {
     pub fn new(config: SlashingConfig, storage: Arc<StorageEngine>) -> Self {
-        Self { config, storage, pending_evidence: HashMap::new() }
+        Self {
+            config,
+            storage,
+            pending_evidence: HashMap::new(),
+        }
     }
 
     // â”€â”€ item 2: detect double vote â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    pub fn detect_double_vote(
-        &self,
-        existing: &Vote,
-        incoming: &Vote,
-    ) -> Option<Misbehavior> {
+    pub fn detect_double_vote(&self, existing: &Vote, incoming: &Vote) -> Option<Misbehavior> {
         if existing.view == incoming.view
             && existing.validator == incoming.validator
             && existing.block_hash != incoming.block_hash
@@ -360,9 +363,13 @@ impl SlashingManager {
             && evidence.reporter_signature == [0u8; 64];
 
         if !locally_observed && !self.verify_evidence_signatures(&evidence, reporter_validator)? {
-            bail!("evidence signature verification failed for {:?}", evidence_id);
+            bail!(
+                "evidence signature verification failed for {:?}",
+                evidence_id
+            );
         }
-        self.pending_evidence.get_mut(evidence_id)
+        self.pending_evidence
+            .get_mut(evidence_id)
             .ok_or_else(|| anyhow!("evidence {:?} disappeared", evidence_id))?
             .verified = true;
         Ok(())
@@ -405,7 +412,8 @@ impl SlashingManager {
         staking.slash_validator(&validator_addr, slash_amount)?;
 
         // item 10: burn slashed tokens (track burned portion)
-        let burned_amount = slash_amount * U256::from(self.config.burn_fraction_bps) / U256::from(10_000u64);
+        let burned_amount =
+            slash_amount * U256::from(self.config.burn_fraction_bps) / U256::from(10_000u64);
         // The remainder (slash_amount - burned_amount) could go to reporter treasury
         // but that accounting is left to the block execution layer (item 20).
 
@@ -434,17 +442,16 @@ impl SlashingManager {
         // item 14: update validator reputation (re-use evidence log entry)
         info!(
             "validator {} reputation updated: slashed {} at height {} for {}",
-            validator_addr, slash_amount, current_height, evidence.misbehavior.kind()
+            validator_addr,
+            slash_amount,
+            current_height,
+            evidence.misbehavior.kind()
         );
 
         // item 15: emit slashing event log
         warn!(
             "[SLASHING EVENT] validator={} kind={} slash={} burned={} height={}",
-            validator_addr,
-            event.misbehavior_kind,
-            slash_amount,
-            burned_amount,
-            current_height
+            validator_addr, event.misbehavior_kind, slash_amount, burned_amount, current_height
         );
 
         // item 16: notify governance module
@@ -461,7 +468,8 @@ impl SlashingManager {
     fn set_cooldown(&self, validator: Address, current_height: u64) -> Result<()> {
         let release_at = current_height.saturating_add(self.config.cooldown_blocks);
         let key = cooldown_key(&validator);
-        self.storage.state_put(key, release_at.to_le_bytes().to_vec())
+        self.storage
+            .state_put(key, release_at.to_le_bytes().to_vec())
     }
 
     pub fn is_in_cooldown(&self, validator: &Address, current_height: u64) -> Result<bool> {
@@ -494,8 +502,8 @@ impl SlashingManager {
 
     fn persist_slashing_event(&self, event: &SlashingEvent) -> Result<()> {
         let key = slashing_event_key(&event.id);
-        let bytes = bincode::serialize(event)
-            .map_err(|e| anyhow!("slash event serialize: {}", e))?;
+        let bytes =
+            bincode::serialize(event).map_err(|e| anyhow!("slash event serialize: {}", e))?;
         self.storage.state_put(key, bytes)
     }
 
@@ -504,8 +512,8 @@ impl SlashingManager {
         let Some(bytes) = self.storage.state_get(key)? else {
             return Ok(None);
         };
-        let event: SlashingEvent = bincode::deserialize(&bytes)
-            .map_err(|e| anyhow!("slash event deserialize: {}", e))?;
+        let event: SlashingEvent =
+            bincode::deserialize(&bytes).map_err(|e| anyhow!("slash event deserialize: {}", e))?;
         Ok(Some(event))
     }
 
@@ -513,8 +521,8 @@ impl SlashingManager {
 
     fn store_slashing_history(&self, validator: &Address, event: &SlashingEvent) -> Result<()> {
         let key = slashing_history_key(validator, event.height);
-        let bytes = bincode::serialize(event)
-            .map_err(|e| anyhow!("slash history serialize: {}", e))?;
+        let bytes =
+            bincode::serialize(event).map_err(|e| anyhow!("slash history serialize: {}", e))?;
         self.storage.state_put(key, bytes)
     }
 
@@ -564,7 +572,10 @@ impl SlashingManager {
     // â”€â”€ item 19: expose slashing via RPC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     pub fn get_slashing_event_rpc(&self, event_id: &[u8; 32]) -> Result<Option<SlashingEventRpc>> {
-        Ok(self.load_slashing_event(event_id)?.as_ref().map(SlashingEventRpc::from))
+        Ok(self
+            .load_slashing_event(event_id)?
+            .as_ref()
+            .map(SlashingEventRpc::from))
     }
 
     pub fn get_slashing_history_rpc(&self, validator: &Address) -> Result<Vec<SlashingEventRpc>> {
@@ -651,14 +662,14 @@ mod tests {
     use crate::governance::GovernanceManager;
     use crate::pos::staking::StakingManager;
     use crate::pos::validator_set::ValidatorSet;
-    use vage_storage::StorageEngine;
-    use vage_types::{Address, Validator};
     use ed25519_dalek::SigningKey;
     use primitive_types::U256;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use vage_storage::StorageEngine;
+    use vage_types::{Address, Validator};
 
     fn unique_db(name: &str) -> (PathBuf, Arc<StorageEngine>) {
         let ts = SystemTime::now()
@@ -674,7 +685,11 @@ mod tests {
     fn make_validator(seed: u8) -> (SigningKey, Validator) {
         let sk = SigningKey::from_bytes(&[seed; 32]);
         let addr = Address::from_public_key(&sk.verifying_key().to_bytes());
-        let validator = Validator::new(addr, sk.verifying_key().to_bytes(), U256::from(1_000_000u64));
+        let validator = Validator::new(
+            addr,
+            sk.verifying_key().to_bytes(),
+            U256::from(1_000_000u64),
+        );
         (sk, validator)
     }
 
@@ -701,16 +716,22 @@ mod tests {
 
         assert!(mgr.detect_double_vote(&vote_a, &vote_b).is_some());
         assert!(mgr.detect_double_vote(&vote_a, &same_block).is_none());
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
     fn detect_double_proposal_different_bytes() {
         let (path, storage) = unique_db("dp");
         let mgr = default_manager(storage.clone());
-        assert!(mgr.detect_double_proposal(3, vec![1, 2], vec![3, 4]).is_some());
-        assert!(mgr.detect_double_proposal(3, vec![1, 2], vec![1, 2]).is_none());
-        drop(storage); let _ = fs::remove_file(&path);
+        assert!(mgr
+            .detect_double_proposal(3, vec![1, 2], vec![3, 4])
+            .is_some());
+        assert!(mgr
+            .detect_double_proposal(3, vec![1, 2], vec![1, 2])
+            .is_none());
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -727,7 +748,8 @@ mod tests {
         let mut bad = valid.clone();
         bad.signature = [0u8; 64];
         assert!(mgr.detect_invalid_signature(&bad, &validator).is_some());
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -738,13 +760,20 @@ mod tests {
         let mut mgr = default_manager(storage.clone());
         let vote_a = make_vote(&sk, [1u8; 32], 1);
         let vote_b = make_vote(&sk, [2u8; 32], 1);
-        let mb = Misbehavior::DoubleVote { view: 1, vote_a, vote_b };
+        let mb = Misbehavior::DoubleVote {
+            view: 1,
+            vote_a,
+            vote_b,
+        };
 
-        let id1 = mgr.record_evidence(addr, mb.clone(), 10, addr, [0u8; 64]).unwrap();
+        let id1 = mgr
+            .record_evidence(addr, mb.clone(), 10, addr, [0u8; 64])
+            .unwrap();
         // Same inputs â†’ same id
         let id2 = mgr.record_evidence(addr, mb, 10, addr, [0u8; 64]).unwrap();
         assert_eq!(id1, id2);
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -759,11 +788,17 @@ mod tests {
         let mut governance = GovernanceManager::new();
 
         vs.add_validator(validator.clone()).unwrap();
-        staking.stake_tokens(addr, U256::from(1_000_000u64)).unwrap();
+        staking
+            .stake_tokens(addr, U256::from(1_000_000u64))
+            .unwrap();
 
         let vote_a = make_vote(&sk, [1u8; 32], 2);
         let vote_b = make_vote(&sk, [2u8; 32], 2);
-        let mb = Misbehavior::DoubleVote { view: 2, vote_a: vote_a.clone(), vote_b: vote_b.clone() };
+        let mb = Misbehavior::DoubleVote {
+            view: 2,
+            vote_a: vote_a.clone(),
+            vote_b: vote_b.clone(),
+        };
 
         // Sign evidence with the reporter's key (reporter == slashed validator for test simplicity)
         let evidence = Evidence::new(addr, mb.clone(), 100, addr, [0u8; 64]);
@@ -774,7 +809,9 @@ mod tests {
         verified.verified = true;
         mgr.pending_evidence.insert(id, verified);
 
-        let event = mgr.execute_slash(&id, 100, &mut vs, &mut staking, &mut governance).unwrap();
+        let event = mgr
+            .execute_slash(&id, 100, &mut vs, &mut staking, &mut governance)
+            .unwrap();
 
         assert!(event.slash_amount > U256::zero());
         assert!(event.burned_amount > U256::zero());
@@ -792,9 +829,12 @@ mod tests {
 
         // Cooldown should be active
         assert!(mgr.is_in_cooldown(&addr, 100).unwrap());
-        assert!(!mgr.is_in_cooldown(&addr, 100 + mgr.config.cooldown_blocks + 1).unwrap());
+        assert!(!mgr
+            .is_in_cooldown(&addr, 100 + mgr.config.cooldown_blocks + 1)
+            .unwrap());
 
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -810,7 +850,11 @@ mod tests {
         staking.stake_tokens(addr, U256::from(500_000u64)).unwrap();
 
         let evidence = {
-            let mb = Misbehavior::DoubleProposal { view: 5, proposal_a: vec![1], proposal_b: vec![2] };
+            let mb = Misbehavior::DoubleProposal {
+                view: 5,
+                proposal_a: vec![1],
+                proposal_b: vec![2],
+            };
             let mut e = Evidence::new(addr, mb, 200, addr, [0u8; 64]);
             e.verified = true;
             e
@@ -818,7 +862,9 @@ mod tests {
         let id = evidence.id;
         mgr.pending_evidence.insert(id, evidence);
 
-        let event = mgr.execute_slash(&id, 200, &mut vs, &mut staking, &mut governance).unwrap();
+        let event = mgr
+            .execute_slash(&id, 200, &mut vs, &mut staking, &mut governance)
+            .unwrap();
 
         let rpc_event = mgr.get_slashing_event_rpc(&event.id).unwrap();
         assert!(rpc_event.is_some());
@@ -827,6 +873,7 @@ mod tests {
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].misbehavior, "DoubleProposal");
 
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 }

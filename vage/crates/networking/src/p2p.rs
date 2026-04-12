@@ -12,19 +12,19 @@ use crate::rpc::{
     L1Codec, L1Request, L1Response, RpcStateProofRequest, RpcStateProofResponse,
     RpcVerifiedHeaderEnvelope,
 };
-use async_trait::async_trait;
 use anyhow::{bail, Result};
+use async_trait::async_trait;
 use futures::StreamExt;
 use libp2p::{
     gossipsub, identify, kad, mdns, noise, request_response, swarm::NetworkBehaviour,
     swarm::SwarmEvent, tcp, yamux, Multiaddr, PeerId, Swarm,
 };
-use vage_block::Block;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::{sleep, timeout};
 use tracing::info;
+use vage_block::Block;
 
 const DEFAULT_MAX_HEADER_BATCH: u64 = 128;
 const DEFAULT_MAX_HEADER_REQUESTS_PER_WINDOW: usize = 32;
@@ -144,7 +144,10 @@ impl P2PNetwork {
                         kad::store::MemoryStore::new(local_peer_id),
                     ),
                     request_response: request_response::Behaviour::<L1Codec>::new(
-                        std::iter::once((libp2p::StreamProtocol::new("/l1/rpc/1.0.0"), request_response::ProtocolSupport::Full)),
+                        std::iter::once((
+                            libp2p::StreamProtocol::new("/l1/rpc/1.0.0"),
+                            request_response::ProtocolSupport::Full,
+                        )),
                         request_response::Config::default(),
                     ),
                 })
@@ -319,7 +322,8 @@ impl P2PNetwork {
             NetworkingMetrics::record_bandwidth("outbound", bytes.len() as u64);
         }
 
-        let request_id = self.swarm
+        let request_id = self
+            .swarm
             .behaviour_mut()
             .request_response
             .send_request(&peer_id, message);
@@ -334,7 +338,11 @@ impl P2PNetwork {
         self.mock_rpc_responses.push_back(response);
     }
 
-    fn handle_rpc_sync_request(&mut self, peer_id: PeerId, request: L1Request) -> Result<L1Response> {
+    fn handle_rpc_sync_request(
+        &mut self,
+        peer_id: PeerId,
+        request: L1Request,
+    ) -> Result<L1Response> {
         match &request {
             L1Request::GetHeaders { start, end } => {
                 if end < start {
@@ -600,9 +608,12 @@ impl P2PNetwork {
         V: VoteSignatureVerifier,
     {
         let start = Instant::now();
-        let result = self
-            .gossip
-            .receive_vote_gossip_message(peer_id, payload, consensus, signature_verifier);
+        let result = self.gossip.receive_vote_gossip_message(
+            peer_id,
+            payload,
+            consensus,
+            signature_verifier,
+        );
         self.record_inbound_message_metrics(TOPIC_VOTES, payload.len());
         let outcome = match result {
             Ok(outcome) => outcome,
@@ -864,8 +875,12 @@ impl RpcSyncClient for P2PNetwork {
             bail!("peer {:?} not found", peer_id);
         };
 
-        let request_id = self.send_rpc_request(peer_id, L1Request::request_latest_block_height())?;
-        match self.await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT).await? {
+        let request_id =
+            self.send_rpc_request(peer_id, L1Request::request_latest_block_height())?;
+        match self
+            .await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT)
+            .await?
+        {
             L1Response::LatestBlockHeight(Some(height)) => Ok(height),
             L1Response::Error(error) => bail!("latest block height request failed: {}", error),
             _ => bail!("unexpected response for latest block height request"),
@@ -878,7 +893,10 @@ impl RpcSyncClient for P2PNetwork {
         };
 
         let request_id = self.send_rpc_request(peer_id, L1Request::request_block(height))?;
-        match self.await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT).await? {
+        match self
+            .await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT)
+            .await?
+        {
             L1Response::Block(block) => Ok(block),
             L1Response::Error(error) => bail!("block request failed: {}", error),
             _ => bail!("unexpected response for block request"),
@@ -896,7 +914,10 @@ impl RpcSyncClient for P2PNetwork {
         };
 
         let request_id = self.send_rpc_request(peer_id, L1Request::request_headers(start, end))?;
-        match self.await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT).await? {
+        match self
+            .await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT)
+            .await?
+        {
             L1Response::Headers(headers) => Ok(headers),
             L1Response::Error(error) => bail!("headers request failed: {}", error),
             _ => bail!("unexpected response for headers request"),
@@ -913,20 +934,30 @@ impl RpcSyncClient for P2PNetwork {
         };
 
         let request_id = self.send_rpc_request(peer_id, L1Request::request_state_proof(request))?;
-        match self.await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT).await? {
+        match self
+            .await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT)
+            .await?
+        {
             L1Response::StateProof(proof) => Ok(proof),
             L1Response::Error(error) => bail!("state proof request failed: {}", error),
             _ => bail!("unexpected response for state proof request"),
         }
     }
 
-    async fn request_block_proof(&mut self, peer_id: PeerId, height: u64) -> Result<Option<Vec<u8>>> {
+    async fn request_block_proof(
+        &mut self,
+        peer_id: PeerId,
+        height: u64,
+    ) -> Result<Option<Vec<u8>>> {
         let Some(_peer) = self.peer_store.get_peer(&peer_id) else {
             bail!("peer {:?} not found", peer_id);
         };
 
         let request_id = self.send_rpc_request(peer_id, L1Request::request_block_proof(height))?;
-        match self.await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT).await? {
+        match self
+            .await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT)
+            .await?
+        {
             L1Response::BlockProof(proof) => Ok(proof),
             L1Response::Error(error) => bail!("block proof request failed: {}", error),
             _ => bail!("unexpected response for block proof request"),
@@ -936,7 +967,6 @@ impl RpcSyncClient for P2PNetwork {
 
 #[cfg(test)]
 mod tests {
-    use async_trait::async_trait;
     use super::{ChainSyncState, P2PConfig, P2PNetwork, RpcSyncClient};
     use crate::gossip::GossipMessage;
     use crate::peer::Peer;
@@ -945,14 +975,15 @@ mod tests {
         RpcVerifiedHeaderEnvelope,
     };
     use anyhow::Result;
+    use async_trait::async_trait;
     use libp2p::{identity::Keypair, Multiaddr, PeerId};
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::time::Duration;
     use vage_block::{Block, BlockBody, BlockHeader};
     use vage_consensus::hotstuff::vote::Vote;
     use vage_types::Address;
     use vage_types::MAX_CANONICAL_MESSAGE_SIZE;
-    use std::cell::RefCell;
-    use std::collections::HashMap;
-    use std::time::Duration;
 
     fn test_config() -> P2PConfig {
         P2PConfig {
@@ -977,10 +1008,7 @@ mod tests {
         header.proposer = proposer;
         let mut block = Block::new(header, BlockBody::empty());
         block.compute_roots();
-        block
-            .header
-            .sign(&signing_key)
-            .expect("block should sign");
+        block.header.sign(&signing_key).expect("block should sign");
         block
     }
 
@@ -1047,7 +1075,11 @@ mod tests {
             Ok(self.remote_height)
         }
 
-        async fn request_block(&mut self, _peer_id: PeerId, height: u64) -> Result<Option<Vec<u8>>> {
+        async fn request_block(
+            &mut self,
+            _peer_id: PeerId,
+            height: u64,
+        ) -> Result<Option<Vec<u8>>> {
             self.requested_heights.borrow_mut().push(height);
             Ok(self.blocks.get(&height).cloned())
         }
@@ -1079,7 +1111,11 @@ mod tests {
             Ok(None)
         }
 
-        async fn request_block_proof(&mut self, _peer_id: PeerId, _height: u64) -> Result<Option<Vec<u8>>> {
+        async fn request_block_proof(
+            &mut self,
+            _peer_id: PeerId,
+            _height: u64,
+        ) -> Result<Option<Vec<u8>>> {
             Ok(None)
         }
     }
@@ -1159,7 +1195,9 @@ mod tests {
         let message = GossipMessage::StateSync(vec![1, 2, 3]);
         network.message_queue.push_back(message.clone());
 
-        assert!(matches!(network.receive_message(), Some(GossipMessage::StateSync(bytes)) if bytes == vec![1, 2, 3]));
+        assert!(
+            matches!(network.receive_message(), Some(GossipMessage::StateSync(bytes)) if bytes == vec![1, 2, 3])
+        );
         assert!(network.receive_message().is_none());
 
         network
@@ -1220,9 +1258,13 @@ mod tests {
         assert_eq!(network.peer_count(), 2);
 
         let discovered_peer = PeerId::from(Keypair::generate_ed25519().public());
-        network.peer_store.add_peer(Peer::new(discovered_peer, tcp_addr(11003)));
+        network
+            .peer_store
+            .add_peer(Peer::new(discovered_peer, tcp_addr(11003)));
         let next_before = network.next_discovery_at;
-        network.trigger_peer_discovery().expect("no-op discovery should succeed");
+        network
+            .trigger_peer_discovery()
+            .expect("no-op discovery should succeed");
         assert_eq!(network.next_discovery_at, next_before);
 
         network.next_discovery_at = std::time::Instant::now();
@@ -1251,7 +1293,10 @@ mod tests {
         assert_eq!(first_backoff, Duration::from_millis(10));
         network.record_discovery_failure(backoff_peer);
         assert_eq!(network.discovery_failures.get(&backoff_peer), Some(&1));
-        assert_eq!(network.discovery_backoff_duration(&backoff_peer), Duration::from_millis(20));
+        assert_eq!(
+            network.discovery_backoff_duration(&backoff_peer),
+            Duration::from_millis(20)
+        );
     }
 
     #[tokio::test]
@@ -1260,7 +1305,9 @@ mod tests {
             .await
             .expect("network should initialize");
         let peer_id = PeerId::from(Keypair::generate_ed25519().public());
-        network.peer_store.add_peer(Peer::new(peer_id, tcp_addr(11005)));
+        network
+            .peer_store
+            .add_peer(Peer::new(peer_id, tcp_addr(11005)));
 
         network
             .advertise_peer_address(peer_id)
@@ -1283,8 +1330,14 @@ mod tests {
         let mut client = MockRpcSyncClient::with_blocks(
             5,
             HashMap::from([
-                (4, bincode::serialize(&block_four).expect("block should encode")),
-                (5, bincode::serialize(&block_five).expect("block should encode")),
+                (
+                    4,
+                    bincode::serialize(&block_four).expect("block should encode"),
+                ),
+                (
+                    5,
+                    bincode::serialize(&block_five).expect("block should encode"),
+                ),
             ]),
         );
 
@@ -1357,15 +1410,23 @@ mod tests {
             .synchronize_chain_from_peer(peer_id, &state, &mut partitioned_client)
             .await
             .expect_err("partitioned sync should fail until missing blocks arrive");
-        assert!(partition_error.to_string().contains("missing block at height 5"));
+        assert!(partition_error
+            .to_string()
+            .contains("missing block at height 5"));
 
         let block_five = signed_block([5u8; 32], 5, 10);
         let block_six = signed_block(block_five.hash(), 6, 11);
         let mut recovered_client = MockRpcSyncClient::with_blocks(
             6,
             HashMap::from([
-                (5, bincode::serialize(&block_five).expect("block should encode")),
-                (6, bincode::serialize(&block_six).expect("block should encode")),
+                (
+                    5,
+                    bincode::serialize(&block_five).expect("block should encode"),
+                ),
+                (
+                    6,
+                    bincode::serialize(&block_six).expect("block should encode"),
+                ),
             ]),
         );
 
@@ -1387,19 +1448,24 @@ mod tests {
             .await
             .expect("network should initialize");
         let peer_id = PeerId::from(Keypair::generate_ed25519().public());
-        network.peer_store.add_peer(Peer::new(peer_id, tcp_addr(12001)));
+        network
+            .peer_store
+            .add_peer(Peer::new(peer_id, tcp_addr(12001)));
         let block_payload = vec![1u8, 2, 3, 4];
 
         network.queue_mock_rpc_response(L1Response::respond_latest_block_height(Some(11)));
         network.queue_mock_rpc_response(L1Response::respond_block(Some(block_payload.clone())));
-        network.queue_mock_rpc_response(L1Response::respond_headers(Some(vec![RpcVerifiedHeaderEnvelope {
+        network.queue_mock_rpc_response(L1Response::respond_headers(Some(vec![
+            RpcVerifiedHeaderEnvelope {
                 header: BlockHeader::new([0u8; 32], 11),
                 consensus_signatures: vec![(Address([1u8; 32]), vec![3u8; 64])],
-            }])));
+            },
+        ])));
 
-        let height = <P2PNetwork as RpcSyncClient>::request_latest_block_height(&mut network, peer_id)
-            .await
-            .expect("height request should succeed");
+        let height =
+            <P2PNetwork as RpcSyncClient>::request_latest_block_height(&mut network, peer_id)
+                .await
+                .expect("height request should succeed");
         let block = <P2PNetwork as RpcSyncClient>::request_block(&mut network, peer_id, 11)
             .await
             .expect("block request should succeed");
@@ -1420,31 +1486,62 @@ mod tests {
             .await
             .expect("network should initialize");
         let peer_id = PeerId::from(Keypair::generate_ed25519().public());
-        network.peer_store.add_peer(Peer::new(peer_id, tcp_addr(12002)));
+        network
+            .peer_store
+            .add_peer(Peer::new(peer_id, tcp_addr(12002)));
 
         let consensus = MockVoteConsensus::default();
         let vote = signed_vote(10, [6u8; 32], 2);
         let payload = vote.encode();
 
         network
-            .receive_vote_gossip_message(peer_id, &payload, &consensus, &MockVoteVerifier { valid: true })
+            .receive_vote_gossip_message(
+                peer_id,
+                &payload,
+                &consensus,
+                &MockVoteVerifier { valid: true },
+            )
             .expect("first vote should succeed");
         let duplicate_error = network
-            .receive_vote_gossip_message(peer_id, &payload, &consensus, &MockVoteVerifier { valid: true })
+            .receive_vote_gossip_message(
+                peer_id,
+                &payload,
+                &consensus,
+                &MockVoteVerifier { valid: true },
+            )
             .expect_err("duplicate vote should fail");
-        assert!(duplicate_error.to_string().contains("DuplicateMessage") || duplicate_error.to_string().contains("duplicate"));
+        assert!(
+            duplicate_error.to_string().contains("DuplicateMessage")
+                || duplicate_error.to_string().contains("duplicate")
+        );
         assert_eq!(
-            network.peer_store.get_peer(&peer_id).expect("peer should exist").reputation,
+            network
+                .peer_store
+                .get_peer(&peer_id)
+                .expect("peer should exist")
+                .reputation,
             -5
         );
 
         let oversized_payload = vec![1u8; MAX_CANONICAL_MESSAGE_SIZE + 1];
         let oversized_error = network
-            .receive_vote_gossip_message(peer_id, &oversized_payload, &consensus, &MockVoteVerifier { valid: true })
+            .receive_vote_gossip_message(
+                peer_id,
+                &oversized_payload,
+                &consensus,
+                &MockVoteVerifier { valid: true },
+            )
             .expect_err("oversized vote should fail");
-        assert!(oversized_error.to_string().contains("MessageTooLarge") || oversized_error.to_string().contains("max size"));
+        assert!(
+            oversized_error.to_string().contains("MessageTooLarge")
+                || oversized_error.to_string().contains("max size")
+        );
         assert_eq!(
-            network.peer_store.get_peer(&peer_id).expect("peer should exist").reputation,
+            network
+                .peer_store
+                .get_peer(&peer_id)
+                .expect("peer should exist")
+                .reputation,
             -30
         );
     }
@@ -1455,10 +1552,17 @@ mod tests {
             .await
             .expect("network should initialize");
         let peer_id = PeerId::from(Keypair::generate_ed25519().public());
-        network.peer_store.add_peer(Peer::new(peer_id, tcp_addr(12003)));
+        network
+            .peer_store
+            .add_peer(Peer::new(peer_id, tcp_addr(12003)));
         let consensus = MockVoteConsensus::default();
 
-        for invalid_payload in [b"bad-vote-1".as_slice(), b"bad-vote-2".as_slice(), b"bad-vote-3".as_slice(), b"bad-vote-4".as_slice()] {
+        for invalid_payload in [
+            b"bad-vote-1".as_slice(),
+            b"bad-vote-2".as_slice(),
+            b"bad-vote-3".as_slice(),
+            b"bad-vote-4".as_slice(),
+        ] {
             let _ = network.receive_vote_gossip_message(
                 peer_id,
                 invalid_payload,
@@ -1467,7 +1571,10 @@ mod tests {
             );
         }
 
-        let peer = network.peer_store.get_peer(&peer_id).expect("peer should exist");
+        let peer = network
+            .peer_store
+            .get_peer(&peer_id)
+            .expect("peer should exist");
         assert!(peer.is_banned());
         assert!(peer.reputation <= -100);
     }

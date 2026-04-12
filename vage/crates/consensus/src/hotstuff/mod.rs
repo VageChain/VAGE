@@ -4,9 +4,9 @@ pub mod vote;
 
 use crate::hotstuff::vote::QuorumCertificate;
 use anyhow::{bail, Result};
-use vage_block::Block;
 use std::collections::HashMap;
 use tracing::warn;
+use vage_block::Block;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HotStuffPhase {
@@ -64,7 +64,11 @@ impl HotStuff {
     pub fn fork_choice(&self, tip_a: [u8; 32], tip_b: [u8; 32]) -> [u8; 32] {
         let view_a = self.block_views.get(&tip_a).copied().unwrap_or(0);
         let view_b = self.block_views.get(&tip_b).copied().unwrap_or(0);
-        if view_a >= view_b { tip_a } else { tip_b }
+        if view_a >= view_b {
+            tip_a
+        } else {
+            tip_b
+        }
     }
 
     pub fn apply_three_phase_commit_rule(
@@ -79,7 +83,8 @@ impl HotStuff {
                 bail!("prepare phase verification failed");
             }
             // Record block metadata for fork-choice and parent QC checks.
-            self.block_parent.insert(block_hash, block.header.parent_hash);
+            self.block_parent
+                .insert(block_hash, block.header.parent_hash);
             self.block_views.insert(block_hash, qc.view);
             self.update_highest_qc(&qc);
             self.prepare_qcs.insert(block_hash, qc);
@@ -264,7 +269,9 @@ mod tests {
             .apply_three_phase_commit_rule(&block, qc_for([9u8; 32], 1))
             .expect_err("prepare phase should reject mismatched qc");
 
-        assert!(error.to_string().contains("prepare phase verification failed"));
+        assert!(error
+            .to_string()
+            .contains("prepare phase verification failed"));
     }
 
     #[test]

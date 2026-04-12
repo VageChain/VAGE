@@ -8,28 +8,28 @@ use thiserror::Error;
 pub enum RpcError {
     #[error("Parse error: {0}")]
     ParseError(String),
-    
+
     #[error("Invalid request: {0}")]
     InvalidRequest(String),
-    
+
     #[error("Method not found: {0}")]
     MethodNotFound(String),
-    
+
     #[error("Invalid params: {0}")]
     InvalidParams(String),
-    
+
     #[error("Internal error: {0}")]
     InternalError(String),
-    
+
     #[error("Block not found: height={0}")]
     BlockNotFound(u64),
-    
+
     #[error("Transaction rejected: {0}")]
     TransactionRejected(String),
-    
+
     #[error("Database error: {0}")]
     DatabaseError(#[from] anyhow::Error),
-    
+
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 }

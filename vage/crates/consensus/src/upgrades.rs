@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
-use vage_types::BlockHeight;
 use serde::{Deserialize, Serialize};
+use vage_types::BlockHeight;
 
 /// Represents a distinct protocol version for the VageChain network.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -12,7 +12,11 @@ pub struct ProtocolVersion {
 
 impl ProtocolVersion {
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 }
 
@@ -51,10 +55,12 @@ impl UpgradeManager {
 
     /// Record a validator's vote for a specific proposal.
     pub fn record_vote(&mut self, proposal_name: &str, weight: u64) -> Result<()> {
-        let proposal = self.pending_upgrades.iter_mut()
+        let proposal = self
+            .pending_upgrades
+            .iter_mut()
             .find(|p| p.name == proposal_name)
             .ok_or_else(|| anyhow::anyhow!("Proposal not found: {}", proposal_name))?;
-        
+
         proposal.votes = proposal.votes.saturating_add(weight);
         Ok(())
     }
@@ -75,10 +81,12 @@ impl UpgradeManager {
 
     /// Schedules an upgrade height once quorum is reached.
     pub fn schedule_upgrade(&mut self, proposal_name: &str, height: BlockHeight) -> Result<()> {
-        let proposal = self.pending_upgrades.iter_mut()
+        let proposal = self
+            .pending_upgrades
+            .iter_mut()
             .find(|p| p.name == proposal_name)
             .ok_or_else(|| anyhow::anyhow!("Proposal not found: {}", proposal_name))?;
-        
+
         proposal.activation_height = height;
         Ok(())
     }

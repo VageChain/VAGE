@@ -23,8 +23,8 @@ pub type Timestamp = u64;
 pub type Hash = [u8; 32];
 pub type Signature = Vec<u8>;
 
-use thiserror::Error;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Error, Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum TxError {

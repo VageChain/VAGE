@@ -1,8 +1,8 @@
 use anyhow::Result;
-use serde_json::json;
-use vage_types::Address;
 use ed25519_dalek::SigningKey;
 use rand::Rng;
+use serde_json::json;
+use vage_types::Address;
 
 /// Call a JSON-RPC method on the VageChain node
 pub async fn call_rpc(

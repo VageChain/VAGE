@@ -1,9 +1,9 @@
-use ed25519_dalek::{SigningKey, VerifyingKey, Signature as DalekSignature, Signer};
+use anyhow::{bail, Result};
+use bincode::Options;
+use ed25519_dalek::{Signature as DalekSignature, Signer, SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
-use anyhow::{Result, bail};
 use vage_types::Address;
-use bincode::Options;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PublicKey(pub [u8; 32]);
@@ -29,7 +29,9 @@ impl<'de> serde::Deserialize<'de> for Signature {
         D: serde::Deserializer<'de>,
     {
         let bytes: Vec<u8> = serde::Deserialize::deserialize(deserializer)?;
-        let arr = bytes.try_into().map_err(|_| serde::de::Error::custom("expected 64 bytes"))?;
+        let arr = bytes
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("expected 64 bytes"))?;
         Ok(Self(arr))
     }
 }
@@ -76,7 +78,7 @@ pub fn generate_keypair() -> (PrivateKey, PublicKey) {
     let signing_key = SigningKey::generate(&mut OsRng);
     (
         PrivateKey(signing_key.to_bytes()),
-        PublicKey(signing_key.verifying_key().to_bytes())
+        PublicKey(signing_key.verifying_key().to_bytes()),
     )
 }
 
@@ -85,7 +87,7 @@ pub fn keypair_from_seed(seed: [u8; 32]) -> (PrivateKey, PublicKey) {
     let signing_key = SigningKey::from_bytes(&seed);
     (
         PrivateKey(signing_key.to_bytes()),
-        PublicKey(signing_key.verifying_key().to_bytes())
+        PublicKey(signing_key.verifying_key().to_bytes()),
     )
 }
 
@@ -116,7 +118,11 @@ pub fn recover_public_key(_message: &[u8], _signature: &Signature) -> Result<Pub
     bail!("Public key recovery is not supported by the Ed25519 cryptosystem. Use ECDSA if recovery is required.")
 }
 
-pub fn fuzz_target_signature_verification(public_key: [u8; 32], message: &[u8], signature: [u8; 64]) {
+pub fn fuzz_target_signature_verification(
+    public_key: [u8; 32],
+    message: &[u8],
+    signature: [u8; 64],
+) {
     let _ = verify(&public_key, message, &signature);
 }
 
@@ -130,7 +136,7 @@ impl PublicKey {
             .serialize(self)
             .expect("public key network serialization should succeed")
     }
-    
+
     pub fn decode_network(bytes: &[u8]) -> Result<Self> {
         bincode::options()
             .with_little_endian()
@@ -143,7 +149,9 @@ impl PublicKey {
 
 #[cfg(test)]
 mod tests {
-    use super::{generate_keypair, keypair_from_seed, recover_public_key, sign, verify, PublicKey, Signature};
+    use super::{
+        generate_keypair, keypair_from_seed, recover_public_key, sign, verify, PublicKey, Signature,
+    };
 
     #[test]
     fn generated_keypair_round_trips_to_address_and_bytes() {
@@ -151,7 +159,9 @@ mod tests {
 
         assert_eq!(PublicKey::from_bytes(public_key.to_bytes()), public_key);
         assert_ne!(public_key.address(), vage_types::Address::zero());
-        public_key.validate().expect("generated public key should validate");
+        public_key
+            .validate()
+            .expect("generated public key should validate");
     }
 
     #[test]
@@ -191,9 +201,14 @@ mod tests {
         let (_private_key, public_key) = keypair_from_seed([11u8; 32]);
         let signature = Signature::from_bytes([12u8; 64]);
 
-        assert_eq!(public_key.to_bytes(), PublicKey::from_bytes(public_key.to_bytes()).to_bytes());
+        assert_eq!(
+            public_key.to_bytes(),
+            PublicKey::from_bytes(public_key.to_bytes()).to_bytes()
+        );
         assert_eq!(signature.to_bytes(), [12u8; 64]);
-        public_key.validate().expect("derived public key should validate");
+        public_key
+            .validate()
+            .expect("derived public key should validate");
     }
 
     #[test]
@@ -217,10 +232,10 @@ mod tests {
         let signature = Signature::from_bytes([14u8; 64]);
 
         let public_key_bytes = public_key.encode_network();
-        let decoded_public_key = PublicKey::decode_network(&public_key_bytes)
-            .expect("public key decode should succeed");
-        let signature_bytes = bincode::serialize(&signature)
-            .expect("signature bincode serialization should succeed");
+        let decoded_public_key =
+            PublicKey::decode_network(&public_key_bytes).expect("public key decode should succeed");
+        let signature_bytes =
+            bincode::serialize(&signature).expect("signature bincode serialization should succeed");
         let decoded_signature: Signature = bincode::deserialize(&signature_bytes)
             .expect("signature bincode deserialization should succeed");
 

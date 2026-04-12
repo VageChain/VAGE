@@ -4,12 +4,8 @@ use crate::parallel::executor::{
 };
 use crate::runtime::ExecutionResult;
 use anyhow::{bail, Result};
-use rayon::prelude::*;
-use vage_block::Block;
-use vage_state::{ReadOnlyStateSnapshot, StateBatchOp, StateDB};
-use vage_storage::{Schema, StorageEngine};
-use vage_types::{Account, Log, Receipt, Transaction};
 use primitive_types::U256;
+use rayon::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -17,6 +13,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::info;
+use vage_block::Block;
+use vage_state::{ReadOnlyStateSnapshot, StateBatchOp, StateDB};
+use vage_storage::{Schema, StorageEngine};
+use vage_types::{Account, Log, Receipt, Transaction};
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct ExecutionMetrics {
@@ -619,7 +619,7 @@ impl Executor {
 
         let mut leaves: Vec<[u8; 32]> = receipts.iter().map(Receipt::hash).collect();
         while leaves.len() > 1 {
-            if leaves.len() % 2 != 0 {
+            if !leaves.len().is_multiple_of(2) {
                 leaves.push(*leaves.last().unwrap());
             }
 
@@ -712,7 +712,8 @@ impl Executor {
     }
 
     pub fn simulate_transaction_on_temporary_state(&self, tx: &Transaction) -> Result<Receipt> {
-        let (_isolated_path, _isolated_storage, isolated_state) = self.create_isolated_state_copy()?;
+        let (_isolated_path, _isolated_storage, isolated_state) =
+            self.create_isolated_state_copy()?;
         let isolated_executor = Executor::new(isolated_state);
         isolated_executor.execute_transaction(tx)
     }
@@ -756,8 +757,7 @@ impl Executor {
                 keys.push(Self::contract_storage_key(&to, tx));
             }
         } else {
-            let contract_address =
-                vage_types::Address::from(vage_crypto::hash::sha256(&tx.hash()));
+            let contract_address = vage_types::Address::from(vage_crypto::hash::sha256(&tx.hash()));
             keys.push(Self::account_state_key(&contract_address));
             keys.push(Self::contract_code_key(&vage_crypto::hash::sha256(
                 &tx.data,
@@ -827,7 +827,8 @@ impl Executor {
             return Ok((0, 0));
         }
 
-        let (isolated_path, isolated_storage, isolated_state) = self.create_isolated_state_copy()?;
+        let (isolated_path, isolated_storage, isolated_state) =
+            self.create_isolated_state_copy()?;
         let tasks: Vec<ParallelExecutorTask> = block
             .body
             .transactions
@@ -843,44 +844,45 @@ impl Executor {
 
         let state_mutex = Arc::new(Mutex::new(StateDB::new(isolated_storage.clone())));
         let pipeline = BlockExecutionPipeline::new(PipelineConfig::default())?;
-        let result = pipeline.speculative_execute(tasks, state_mutex, |task, _snapshot_id, _mv_memory| {
-            let tx: Transaction = match bincode::deserialize(&task.tx_bytes) {
-                Ok(tx) => tx,
-                Err(error) => {
-                    return RawOutcome {
-                        tx_index: task.tx_index,
-                        tx_hash: task.tx_hash,
-                        gas_limit: task.gas_limit,
-                        gas_used: 0,
-                        success: false,
-                        revert_reason: Some(format!("deserialize tx: {error}")),
-                        write_set: Vec::new(),
-                        read_set: Vec::new(),
-                        events: Vec::new(),
-                        return_data: Vec::new(),
-                        execution_status: false,
-                    };
-                }
-            };
+        let result =
+            pipeline.speculative_execute(tasks, state_mutex, |task, _snapshot_id, _mv_memory| {
+                let tx: Transaction = match bincode::deserialize(&task.tx_bytes) {
+                    Ok(tx) => tx,
+                    Err(error) => {
+                        return RawOutcome {
+                            tx_index: task.tx_index,
+                            tx_hash: task.tx_hash,
+                            gas_limit: task.gas_limit,
+                            gas_used: 0,
+                            success: false,
+                            revert_reason: Some(format!("deserialize tx: {error}")),
+                            write_set: Vec::new(),
+                            read_set: Vec::new(),
+                            events: Vec::new(),
+                            return_data: Vec::new(),
+                            execution_status: false,
+                        };
+                    }
+                };
 
-            RawOutcome {
-                tx_index: task.tx_index,
-                tx_hash: task.tx_hash,
-                gas_limit: task.gas_limit,
-                gas_used: gas::calculate_intrinsic_gas(&tx.data),
-                success: true,
-                revert_reason: None,
-                write_set: self
-                    .transaction_write_set(&tx)
-                    .into_iter()
-                    .map(|key| (key, Vec::new()))
-                    .collect(),
-                read_set: self.transaction_read_set(&tx),
-                events: Vec::new(),
-                return_data: Vec::new(),
-                execution_status: true,
-            }
-        });
+                RawOutcome {
+                    tx_index: task.tx_index,
+                    tx_hash: task.tx_hash,
+                    gas_limit: task.gas_limit,
+                    gas_used: gas::calculate_intrinsic_gas(&tx.data),
+                    success: true,
+                    revert_reason: None,
+                    write_set: self
+                        .transaction_write_set(&tx)
+                        .into_iter()
+                        .map(|key| (key, Vec::new()))
+                        .collect(),
+                    read_set: self.transaction_read_set(&tx),
+                    events: Vec::new(),
+                    return_data: Vec::new(),
+                    execution_status: true,
+                }
+            });
 
         drop(isolated_state);
         drop(isolated_storage);
@@ -895,13 +897,25 @@ impl Executor {
         Schema::init(&path)?;
         let storage = Arc::new(StorageEngine::new(&path)?);
 
-        for (key, value) in self.state.storage().state_prefix_scan(b"account:".to_vec())? {
+        for (key, value) in self
+            .state
+            .storage()
+            .state_prefix_scan(b"account:".to_vec())?
+        {
             storage.state_put(key, value)?;
         }
-        for (key, value) in self.state.storage().state_prefix_scan(b"storage:".to_vec())? {
+        for (key, value) in self
+            .state
+            .storage()
+            .state_prefix_scan(b"storage:".to_vec())?
+        {
             storage.state_put(key, value)?;
         }
-        if let Some(root) = self.state.storage().state_get(b"metadata:state_root".to_vec())? {
+        if let Some(root) = self
+            .state
+            .storage()
+            .state_get(b"metadata:state_root".to_vec())?
+        {
             storage.state_put(b"metadata:state_root".to_vec(), root)?;
         }
 
@@ -947,13 +961,13 @@ mod tests {
     use anyhow::Result;
     use ed25519_dalek::SigningKey;
     use primitive_types::U256;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
     use vage_block::{Block, BlockBody, BlockHeader};
     use vage_state::StateDB;
     use vage_storage::{Schema, StorageEngine};
     use vage_types::{Account, Address, Transaction};
-    use std::path::PathBuf;
-    use std::sync::{Arc, Mutex};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[derive(Clone)]
     struct MockTransactionSource {
@@ -1010,7 +1024,12 @@ mod tests {
         (storage, state, executor, db_path)
     }
 
-    fn cleanup(storage: Arc<StorageEngine>, state: Arc<StateDB>, executor: Executor, path: PathBuf) {
+    fn cleanup(
+        storage: Arc<StorageEngine>,
+        state: Arc<StateDB>,
+        executor: Executor,
+        path: PathBuf,
+    ) {
         drop(executor);
         drop(state);
         drop(storage);
@@ -1024,7 +1043,8 @@ mod tests {
     fn signed_transfer(from_key: &SigningKey, to: Address, value: u64, nonce: u64) -> Transaction {
         let from = Address::from_public_key(&from_key.verifying_key().to_bytes());
         let mut tx = Transaction::new_transfer(from, to, U256::from(value), nonce);
-        tx.sign(from_key).expect("transaction signing should succeed");
+        tx.sign(from_key)
+            .expect("transaction signing should succeed");
         tx
     }
 
@@ -1043,20 +1063,28 @@ mod tests {
     ) -> Transaction {
         let from = Address::from_public_key(&from_key.verifying_key().to_bytes());
         let mut tx = Transaction::new_contract_call(from, to, U256::from(value), nonce, data);
-        tx.sign(from_key).expect("transaction signing should succeed");
+        tx.sign(from_key)
+            .expect("transaction signing should succeed");
         tx
     }
 
     #[test]
     fn new_initializes_executor_and_basic_helpers_work() {
         let (storage, state, executor, path) = test_executor("new");
-        let committed_root = executor.commit_state().expect("initial commit should succeed");
+        let committed_root = executor
+            .commit_state()
+            .expect("initial commit should succeed");
 
         assert_eq!(executor.collect_receipts().len(), 0);
         assert_eq!(executor.execution_metrics().executed_transactions, 0);
         assert_eq!(executor.compute_block_state_root(), state.state_root());
-        assert!(executor.execute_system_transactions().expect("system tx execution should succeed").is_empty());
-        assert!(executor.verify_state_root(committed_root).expect("state root verification should succeed"));
+        assert!(executor
+            .execute_system_transactions()
+            .expect("system tx execution should succeed")
+            .is_empty());
+        assert!(executor
+            .verify_state_root(committed_root)
+            .expect("state root verification should succeed"));
         assert!(!executor.detect_execution_failure());
 
         cleanup(storage, state, executor, path);
@@ -1077,8 +1105,12 @@ mod tests {
             .expect("recipient update should succeed");
 
         let tx = signed_transfer(&sender_key, recipient, 1_000, 0);
-        executor.pre_execution_checks(&tx).expect("pre-execution checks should succeed");
-        let receipt = executor.execute_transaction(&tx).expect("transaction execution should succeed");
+        executor
+            .pre_execution_checks(&tx)
+            .expect("pre-execution checks should succeed");
+        let receipt = executor
+            .execute_transaction(&tx)
+            .expect("transaction execution should succeed");
 
         assert!(receipt.status);
         assert_eq!(receipt.tx_hash, tx.hash());
@@ -1145,7 +1177,9 @@ mod tests {
         executor
             .check_nonce_correctness(&tx, &sender_state)
             .expect("nonce check should succeed");
-        executor.validate_gas_limit(&tx).expect("gas validation should succeed");
+        executor
+            .validate_gas_limit(&tx)
+            .expect("gas validation should succeed");
 
         let mut gas_sender = sender_state.clone();
         let upfront_fee = executor
@@ -1157,15 +1191,26 @@ mod tests {
         let mut transfer_sender = sender_state.clone();
         let mut transfer_recipient = recipient_state.clone();
         executor
-            .perform_transfer_or_contract_execution(&tx, &mut transfer_sender, Some(&mut transfer_recipient))
+            .perform_transfer_or_contract_execution(
+                &tx,
+                &mut transfer_sender,
+                Some(&mut transfer_recipient),
+            )
             .expect("transfer step should succeed");
         assert_eq!(transfer_sender.balance, sender_state.balance - tx.value);
-        assert_eq!(transfer_recipient.balance, recipient_state.balance + tx.value);
+        assert_eq!(
+            transfer_recipient.balance,
+            recipient_state.balance + tx.value
+        );
 
         executor.update_sender_nonce(&mut transfer_sender);
         assert_eq!(transfer_sender.nonce, sender_state.nonce + 1);
 
-        let logs = executor.emit_execution_logs(&tx, gas::calculate_intrinsic_gas(&tx.data), U256::from(123u64));
+        let logs = executor.emit_execution_logs(
+            &tx,
+            gas::calculate_intrinsic_gas(&tx.data),
+            U256::from(123u64),
+        );
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].address, tx.from);
         assert_eq!(logs[0].topics, vec![tx.hash()]);
@@ -1177,11 +1222,21 @@ mod tests {
         assert!(receipt.status);
 
         let refund = executor
-            .refund_unused_gas(&sender, &tx, tx.gas_cost(), gas::calculate_intrinsic_gas(&tx.data))
+            .refund_unused_gas(
+                &sender,
+                &tx,
+                tx.gas_cost(),
+                gas::calculate_intrinsic_gas(&tx.data),
+            )
             .expect("refund should succeed");
-        assert_eq!(refund, tx.gas_cost() - U256::from(gas::calculate_intrinsic_gas(&tx.data)));
         assert_eq!(
-            state.get_balance(&sender).expect("sender balance read should succeed"),
+            refund,
+            tx.gas_cost() - U256::from(gas::calculate_intrinsic_gas(&tx.data))
+        );
+        assert_eq!(
+            state
+                .get_balance(&sender)
+                .expect("sender balance read should succeed"),
             U256::from(300_000u64) + refund
         );
 
@@ -1213,15 +1268,21 @@ mod tests {
 
         let storage_key = vage_crypto::hash::sha256(&call_data);
         assert_eq!(
-            state.get_storage(&contract, storage_key).expect("storage read should succeed"),
+            state
+                .get_storage(&contract, storage_key)
+                .expect("storage read should succeed"),
             Some(tx.hash())
         );
         assert_eq!(
-            state.get_balance(&contract).expect("contract balance read should succeed"),
+            state
+                .get_balance(&contract)
+                .expect("contract balance read should succeed"),
             U256::from(750u64)
         );
         assert_eq!(
-            state.get_nonce(&sender).expect("sender nonce read should succeed"),
+            state
+                .get_nonce(&sender)
+                .expect("sender nonce read should succeed"),
             1
         );
         assert_eq!(receipt.logs.len(), 1);
@@ -1267,21 +1328,30 @@ mod tests {
         let address = Address([22u8; 32]);
         let receipt = vage_types::Receipt::new_success([7u8; 32], 21_000, Some(state.state_root()));
 
-        executor.apply_receipts(vec![receipt.clone()]).expect("apply receipts should succeed");
+        executor
+            .apply_receipts(vec![receipt.clone()])
+            .expect("apply receipts should succeed");
         assert_eq!(executor.collect_receipts(), vec![receipt]);
 
         state
             .update_account(&address, &funded_account(address, 75))
             .expect("account update should succeed");
         let committed_root = executor.commit_state().expect("commit should succeed");
-        assert!(executor.verify_state_root(committed_root).expect("committed root verification should succeed"));
+        assert!(executor
+            .verify_state_root(committed_root)
+            .expect("committed root verification should succeed"));
 
         state
             .set_balance(&address, U256::from(5u64))
             .expect("balance update should succeed");
         let rolled_back_root = executor.rollback_state().expect("rollback should succeed");
         assert_eq!(rolled_back_root, committed_root);
-        assert_eq!(state.get_balance(&address).expect("balance read should succeed"), U256::from(75u64));
+        assert_eq!(
+            state
+                .get_balance(&address)
+                .expect("balance read should succeed"),
+            U256::from(75u64)
+        );
 
         state.snapshot_state(0).expect("snapshot should succeed");
         state
@@ -1289,7 +1359,12 @@ mod tests {
             .expect("balance update should succeed");
         let reset_root = executor.reset_state(0).expect("reset state should succeed");
         assert_eq!(reset_root, committed_root);
-        assert_eq!(state.get_balance(&address).expect("balance read should succeed"), U256::from(75u64));
+        assert_eq!(
+            state
+                .get_balance(&address)
+                .expect("balance read should succeed"),
+            U256::from(75u64)
+        );
 
         cleanup(storage, state, executor, path);
     }
@@ -1309,10 +1384,17 @@ mod tests {
 
         let tx = signed_transfer(&sender_key, recipient, 1_000, 0);
         let generated_receipts = executor
-            .generate_block_receipts(&Block::new(BlockHeader::new([1u8; 32], 1), BlockBody {
-                transactions: vec![tx.clone()],
-                receipts: vec![vage_types::Receipt::new_success(tx.hash(), gas::calculate_intrinsic_gas(&tx.data), Some(state.state_root()))],
-            }))
+            .generate_block_receipts(&Block::new(
+                BlockHeader::new([1u8; 32], 1),
+                BlockBody {
+                    transactions: vec![tx.clone()],
+                    receipts: vec![vage_types::Receipt::new_success(
+                        tx.hash(),
+                        gas::calculate_intrinsic_gas(&tx.data),
+                        Some(state.state_root()),
+                    )],
+                },
+            ))
             .expect("receipt generation should succeed");
         assert_eq!(generated_receipts.len(), 1);
 
@@ -1324,7 +1406,9 @@ mod tests {
         executor
             .validate_block_transactions(&empty_block)
             .expect("empty block validation should succeed");
-        let executed_root = executor.execute_block(empty_block).expect("empty block execution should succeed");
+        let executed_root = executor
+            .execute_block(empty_block)
+            .expect("empty block execution should succeed");
         assert_eq!(executed_root, empty_root);
 
         cleanup(storage, state, executor, path);
@@ -1345,7 +1429,9 @@ mod tests {
         state
             .update_account(&recipient, &funded_account(recipient, 250))
             .expect("recipient update should succeed");
-        executor.commit_state().expect("initial commit should succeed");
+        executor
+            .commit_state()
+            .expect("initial commit should succeed");
         preview_state
             .update_account(&sender, &funded_account(sender, 900_000))
             .expect("preview sender update should succeed");
@@ -1414,11 +1500,19 @@ mod tests {
         let decoded_result = ExecutionResult::decode(&encoded_result)
             .expect("execution result decode should succeed");
         assert!(decoded_result.status);
-        assert_eq!(decoded_result.gas_used, gas::calculate_intrinsic_gas(&tx.data));
+        assert_eq!(
+            decoded_result.gas_used,
+            gas::calculate_intrinsic_gas(&tx.data)
+        );
         assert_eq!(decoded_result.logs.len(), 1);
         assert_eq!(decoded_result.return_data, committed_root.to_vec());
 
-        cleanup(preview_storage, preview_state, preview_executor, preview_path);
+        cleanup(
+            preview_storage,
+            preview_state,
+            preview_executor,
+            preview_path,
+        );
         cleanup(storage, state, executor, path);
     }
 
@@ -1446,22 +1540,28 @@ mod tests {
             .expect("recipient B update should succeed");
 
         let first = signed_transfer(&sender_key, recipient_a, 1_000, 0);
-    let second = signed_transfer(&other_sender_key, recipient_b, 2_000, 0);
+        let second = signed_transfer(&other_sender_key, recipient_b, 2_000, 0);
 
-        let dependencies = executor.detect_transaction_dependencies(&[first.clone(), second.clone()]);
+        let dependencies =
+            executor.detect_transaction_dependencies(&[first.clone(), second.clone()]);
         assert_eq!(dependencies.len(), 2);
-    assert!(dependencies[1].depends_on.is_empty());
+        assert!(dependencies[1].depends_on.is_empty());
 
         let committed = executor
             .parallel_execute_batch(vec![first.clone(), second.clone()])
             .expect("parallel batch execution should succeed");
         assert_eq!(committed.len(), 2);
 
-        executor.post_execution_updates(&second).expect("post execution updates should succeed");
+        executor
+            .post_execution_updates(&second)
+            .expect("post execution updates should succeed");
         let metrics = executor.execution_metrics();
         assert_eq!(metrics.executed_transactions, 2);
         assert_eq!(metrics.receipts_collected, 2);
-        assert_eq!(metrics.gas_used, gas::calculate_intrinsic_gas(&first.data) + gas::calculate_intrinsic_gas(&second.data));
+        assert_eq!(
+            metrics.gas_used,
+            gas::calculate_intrinsic_gas(&first.data) + gas::calculate_intrinsic_gas(&second.data)
+        );
 
         executor.metrics.lock().unwrap().failed_transactions = 1;
         assert!(executor.detect_execution_failure());
@@ -1508,7 +1608,10 @@ mod tests {
         assert_eq!(produced.body.receipts.len(), 1);
         assert_eq!(produced.body.receipts[0].tx_hash, tx.hash());
         assert_eq!(produced.header.tx_root, produced.body.compute_tx_root());
-        assert_eq!(produced.header.receipts_root, produced.body.compute_receipt_root());
+        assert_eq!(
+            produced.header.receipts_root,
+            produced.body.compute_receipt_root()
+        );
         assert_eq!(produced.header.state_root, preview_state.state_root());
 
         executor
@@ -1522,14 +1625,35 @@ mod tests {
             .expect("mempool to consensus flow should succeed");
         assert_eq!(final_block.body.transactions.len(), 1);
         assert_eq!(final_block.body.receipts.len(), 1);
-        assert_eq!(final_block.header.tx_root, final_block.body.compute_tx_root());
-        assert_eq!(final_block.header.receipts_root, final_block.body.compute_receipt_root());
+        assert_eq!(
+            final_block.header.tx_root,
+            final_block.body.compute_tx_root()
+        );
+        assert_eq!(
+            final_block.header.receipts_root,
+            final_block.body.compute_receipt_root()
+        );
         assert_eq!(sink.submitted_blocks.lock().unwrap().len(), 2);
         assert_eq!(source.acknowledged.lock().unwrap().as_slice(), &[tx.hash()]);
-        assert_eq!(state.get_nonce(&sender).expect("sender nonce read should succeed"), 1);
-        assert!(state.get_balance(&recipient).expect("recipient balance read should succeed") > U256::from(50u64));
+        assert_eq!(
+            state
+                .get_nonce(&sender)
+                .expect("sender nonce read should succeed"),
+            1
+        );
+        assert!(
+            state
+                .get_balance(&recipient)
+                .expect("recipient balance read should succeed")
+                > U256::from(50u64)
+        );
 
-        cleanup(preview_storage, preview_state, preview_executor, preview_path);
+        cleanup(
+            preview_storage,
+            preview_state,
+            preview_executor,
+            preview_path,
+        );
         cleanup(storage, state, executor, path);
     }
 
@@ -1542,18 +1666,30 @@ mod tests {
         let receiver_b = Address([102u8; 32]);
         let contract = Address([103u8; 32]);
 
-        state.update_account(&sender, &funded_account(sender, 1_000_000)).expect("sender update should succeed");
-        state.update_account(&receiver_a, &funded_account(receiver_a, 0)).expect("receiver A update should succeed");
-        state.update_account(&receiver_b, &funded_account(receiver_b, 0)).expect("receiver B update should succeed");
+        state
+            .update_account(&sender, &funded_account(sender, 1_000_000))
+            .expect("sender update should succeed");
+        state
+            .update_account(&receiver_a, &funded_account(receiver_a, 0))
+            .expect("receiver A update should succeed");
+        state
+            .update_account(&receiver_b, &funded_account(receiver_b, 0))
+            .expect("receiver B update should succeed");
         let mut contract_account = funded_account(contract, 0);
         contract_account.apply_contract_deploy([55u8; 32]);
-        state.update_account(&contract, &contract_account).expect("contract update should succeed");
+        state
+            .update_account(&contract, &contract_account)
+            .expect("contract update should succeed");
 
         let first = signed_transfer(&sender_key, receiver_a, 10, 0);
         let second = signed_transfer(&sender_key, receiver_b, 20, 1);
         let third = signed_contract_call(&sender_key, contract, 0, 2, vec![1u8, 2, 3]);
 
-        let dependencies = executor.detect_transaction_dependencies(&[first.clone(), second.clone(), third.clone()]);
+        let dependencies = executor.detect_transaction_dependencies(&[
+            first.clone(),
+            second.clone(),
+            third.clone(),
+        ]);
         assert_eq!(dependencies.len(), 3);
         assert!(dependencies[0].depends_on.is_empty());
         assert_eq!(dependencies[1].depends_on, vec![0]);
@@ -1567,22 +1703,42 @@ mod tests {
         let (storage, state, executor, path) = test_executor("conflict-detection");
         let address = Address([104u8; 32]);
         let other = Address([105u8; 32]);
-        state.update_account(&address, &funded_account(address, 10)).expect("address update should succeed");
-        state.update_account(&other, &funded_account(other, 20)).expect("other update should succeed");
+        state
+            .update_account(&address, &funded_account(address, 10))
+            .expect("address update should succeed");
+        state
+            .update_account(&other, &funded_account(other, 20))
+            .expect("other update should succeed");
         state.commit().expect("initial commit should succeed");
 
         let snapshot = state.begin_read_only_snapshot();
         let keys = vec![
-            b"account:".iter().copied().chain(address.as_bytes().iter().copied()).collect::<Vec<u8>>(),
-            b"account:".iter().copied().chain(other.as_bytes().iter().copied()).collect::<Vec<u8>>(),
+            b"account:"
+                .iter()
+                .copied()
+                .chain(address.as_bytes().iter().copied())
+                .collect::<Vec<u8>>(),
+            b"account:"
+                .iter()
+                .copied()
+                .chain(other.as_bytes().iter().copied())
+                .collect::<Vec<u8>>(),
         ];
-        let reads = executor.parallel_state_reads(&keys).expect("parallel state reads should succeed");
+        let reads = executor
+            .parallel_state_reads(&keys)
+            .expect("parallel state reads should succeed");
         assert_eq!(reads.len(), 2);
         assert!(reads.iter().all(Option::is_some));
-        assert!(!executor.detect_conflicts(&snapshot, &keys).expect("conflict detection should succeed"));
+        assert!(!executor
+            .detect_conflicts(&snapshot, &keys)
+            .expect("conflict detection should succeed"));
 
-        state.set_balance(&address, U256::from(99u64)).expect("balance update should succeed");
-        assert!(executor.detect_conflicts(&snapshot, &keys).expect("conflict detection should succeed"));
+        state
+            .set_balance(&address, U256::from(99u64))
+            .expect("balance update should succeed");
+        assert!(executor
+            .detect_conflicts(&snapshot, &keys)
+            .expect("conflict detection should succeed"));
 
         cleanup(storage, state, executor, path);
     }
@@ -1597,10 +1753,18 @@ mod tests {
         let receiver_a = Address([106u8; 32]);
         let receiver_b = Address([107u8; 32]);
 
-        state.update_account(&first_sender, &funded_account(first_sender, 500_000)).expect("first sender update should succeed");
-        state.update_account(&second_sender, &funded_account(second_sender, 500_000)).expect("second sender update should succeed");
-        state.update_account(&receiver_a, &funded_account(receiver_a, 0)).expect("receiver A update should succeed");
-        state.update_account(&receiver_b, &funded_account(receiver_b, 0)).expect("receiver B update should succeed");
+        state
+            .update_account(&first_sender, &funded_account(first_sender, 500_000))
+            .expect("first sender update should succeed");
+        state
+            .update_account(&second_sender, &funded_account(second_sender, 500_000))
+            .expect("second sender update should succeed");
+        state
+            .update_account(&receiver_a, &funded_account(receiver_a, 0))
+            .expect("receiver A update should succeed");
+        state
+            .update_account(&receiver_b, &funded_account(receiver_b, 0))
+            .expect("receiver B update should succeed");
 
         let first = signed_transfer(&first_sender_key, receiver_a, 1_000, 0);
         let second = signed_transfer(&second_sender_key, receiver_b, 2_000, 0);
@@ -1615,17 +1779,44 @@ mod tests {
         assert_eq!(optimistic[1].index, 1);
         assert!(!optimistic[0].conflicted);
         assert!(!optimistic[1].conflicted);
-        assert_eq!(optimistic[0].receipt.as_ref().expect("first receipt should exist").tx_hash, first.hash());
-        assert_eq!(optimistic[1].receipt.as_ref().expect("second receipt should exist").tx_hash, second.hash());
+        assert_eq!(
+            optimistic[0]
+                .receipt
+                .as_ref()
+                .expect("first receipt should exist")
+                .tx_hash,
+            first.hash()
+        );
+        assert_eq!(
+            optimistic[1]
+                .receipt
+                .as_ref()
+                .expect("second receipt should exist")
+                .tx_hash,
+            second.hash()
+        );
 
         let committed = executor
-            .commit_optimistic_results(&transactions, vec![optimistic[1].clone(), optimistic[0].clone()])
+            .commit_optimistic_results(
+                &transactions,
+                vec![optimistic[1].clone(), optimistic[0].clone()],
+            )
             .expect("optimistic commit should succeed");
         assert_eq!(committed.len(), 2);
         assert_eq!(committed[0].tx_hash, first.hash());
         assert_eq!(committed[1].tx_hash, second.hash());
-        assert_eq!(state.get_nonce(&first_sender).expect("first sender nonce read should succeed"), 1);
-        assert_eq!(state.get_nonce(&second_sender).expect("second sender nonce read should succeed"), 1);
+        assert_eq!(
+            state
+                .get_nonce(&first_sender)
+                .expect("first sender nonce read should succeed"),
+            1
+        );
+        assert_eq!(
+            state
+                .get_nonce(&second_sender)
+                .expect("second sender nonce read should succeed"),
+            1
+        );
 
         cleanup(storage, state, executor, path);
     }
@@ -1634,14 +1825,25 @@ mod tests {
     fn rollback_on_conflict_restores_committed_state() {
         let (storage, state, executor, path) = test_executor("rollback-on-conflict");
         let address = Address([108u8; 32]);
-        state.update_account(&address, &funded_account(address, 123)).expect("account update should succeed");
+        state
+            .update_account(&address, &funded_account(address, 123))
+            .expect("account update should succeed");
         let committed_root = state.commit().expect("commit should succeed");
 
-        state.set_balance(&address, U256::from(456u64)).expect("balance mutation should succeed");
-        let rolled_back_root = executor.rollback_on_conflict().expect("rollback on conflict should succeed");
+        state
+            .set_balance(&address, U256::from(456u64))
+            .expect("balance mutation should succeed");
+        let rolled_back_root = executor
+            .rollback_on_conflict()
+            .expect("rollback on conflict should succeed");
 
         assert_eq!(rolled_back_root, committed_root);
-        assert_eq!(state.get_balance(&address).expect("balance read should succeed"), U256::from(123u64));
+        assert_eq!(
+            state
+                .get_balance(&address)
+                .expect("balance read should succeed"),
+            U256::from(123u64)
+        );
 
         cleanup(storage, state, executor, path);
     }

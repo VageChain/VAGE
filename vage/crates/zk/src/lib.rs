@@ -2,17 +2,17 @@ pub mod groth16;
 pub mod sp1;
 
 use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use vage_block::Block;
 use vage_execution::runtime::ExecutionResult;
 use vage_state::VerkleProof;
 use vage_storage::StorageEngine;
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 pub use crate::groth16::Groth16Verifier;
 pub use crate::sp1::{
-    Sp1ExecutionEnvironment, Sp1ExecutionTrace, Sp1Proof, Sp1Prover, Sp1Verifier,
-    ZkBlockWitness, ZkPublicInputs,
+    Sp1ExecutionEnvironment, Sp1ExecutionTrace, Sp1Proof, Sp1Prover, Sp1Verifier, ZkBlockWitness,
+    ZkPublicInputs,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -467,11 +467,8 @@ impl ZkEngine {
             public_inputs: Vec::new(), // filled below
         };
 
-        let public_inputs = ZkPublicInputs::new(
-            state_root_before,
-            block.header.state_root,
-            block.hash(),
-        );
+        let public_inputs =
+            ZkPublicInputs::new(state_root_before, block.header.state_root, block.hash());
 
         Ok(ZkBlockWitness::new(block_trace, public_inputs))
     }
@@ -495,27 +492,21 @@ impl ZkEngine {
     /// * `block`             â€” the candidate block containing `header.zk_proof`.
     /// * `state_root_before` â€” Verkle root of the **parent** block (not stored
     ///   in the candidate header itself).
-    pub fn validate_block_proof(
-        &self,
-        block: &Block,
-        state_root_before: [u8; 32],
-    ) -> Result<()> {
-        let proof_bytes = block
-            .header
-            .zk_proof
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("block at height {} has no attached ZK proof", block.header.height))?;
+    pub fn validate_block_proof(&self, block: &Block, state_root_before: [u8; 32]) -> Result<()> {
+        let proof_bytes = block.header.zk_proof.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "block at height {} has no attached ZK proof",
+                block.header.height
+            )
+        })?;
 
         // Deserialise the proof envelope stored in the block header.
         let sp1_proof: Sp1Proof = bincode::deserialize(proof_bytes)
             .map_err(|e| anyhow::anyhow!("failed to deserialise block ZK proof: {}", e))?;
 
         // Reconstruct the public inputs we expect for this block (items 14â€“16).
-        let public_inputs = ZkPublicInputs::new(
-            state_root_before,
-            block.header.state_root,
-            block.hash(),
-        );
+        let public_inputs =
+            ZkPublicInputs::new(state_root_before, block.header.state_root, block.hash());
 
         // Derive the verification key from the encoded public inputs.
         let encoded_pi = public_inputs.encode();
@@ -568,4 +559,3 @@ impl ZkEngine {
             .transpose()
     }
 }
-

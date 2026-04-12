@@ -20,11 +20,11 @@ use revm::primitives::{
     KECCAK_EMPTY, U256 as RevmU256,
 };
 use revm::{Database, DatabaseCommit};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use vage_crypto::hash::sha256;
 use vage_state::StateDb;
 use vage_types::{Address, Log, Transaction};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -166,9 +166,8 @@ impl EvmRuntime {
         let mut evm = self.build_evm(state.clone());
         self.populate_tx_env(&mut evm.env.tx, tx);
         // Clear `to` so revm treats this as a CREATE transaction.
-        evm.env.tx.transact_to = revm::primitives::TransactTo::Create(
-            revm::primitives::CreateScheme::Create,
-        );
+        evm.env.tx.transact_to =
+            revm::primitives::TransactTo::Create(revm::primitives::CreateScheme::Create);
 
         // Run EVM (item 9); the `StateDbBackend::commit` persists storage writes.
         let result = evm
@@ -219,9 +218,7 @@ impl EvmRuntime {
         // Destination / call-or-create (item 7).
         tx_env.transact_to = match tx.to {
             Some(ref to) => revm::primitives::TransactTo::Call(l1_addr_to_revm(to)),
-            None => revm::primitives::TransactTo::Create(
-                revm::primitives::CreateScheme::Create,
-            ),
+            None => revm::primitives::TransactTo::Create(revm::primitives::CreateScheme::Create),
         };
 
         // Input data (item 7).
@@ -363,7 +360,10 @@ impl Database for StateDbBackend {
 
 /// Commit EVM state-diff back to [`StateDb`] after a successful transaction (item 11, 15).
 impl DatabaseCommit for StateDbBackend {
-    fn commit(&mut self, changes: revm::primitives::HashMap<RevmAddress, revm::primitives::Account>) {
+    fn commit(
+        &mut self,
+        changes: revm::primitives::HashMap<RevmAddress, revm::primitives::Account>,
+    ) {
         for (revm_addr, revm_account) in changes {
             if revm_account.is_selfdestructed() {
                 let l1_addr = revm_addr_to_l1(revm_addr);

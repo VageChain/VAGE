@@ -1,8 +1,8 @@
 use anyhow::Result;
 use primitive_types::U256;
-use vage_types::{Address, Hash, Transaction};
 use std::collections::{BTreeMap, HashMap};
 use std::time::{SystemTime, UNIX_EPOCH};
+use vage_types::{Address, Hash, Transaction};
 
 pub struct TransactionPool {
     pub txs: HashMap<Hash, Transaction>,
@@ -47,17 +47,20 @@ impl TransactionPool {
             anyhow::bail!("transaction already exists in pool");
         }
 
-        //  secondary index maintenance 
+        //  secondary index maintenance
         self.by_sender
             .entry(tx.from)
             .or_default()
             .insert(tx.nonce, hash);
         self.by_nonce.entry(tx.nonce).or_default().push(hash);
-        self.by_gas_price.entry(tx.gas_price).or_default().push(hash);
+        self.by_gas_price
+            .entry(tx.gas_price)
+            .or_default()
+            .push(hash);
         self.by_arrival_time.insert(self.arrival_sequence, hash);
         self.timestamps.insert(hash, unix_timestamp());
         self.arrival_sequence = self.arrival_sequence.saturating_add(1);
-        // 
+        //
 
         self.txs.insert(hash, tx);
         Ok(hash)
@@ -105,7 +108,7 @@ impl TransactionPool {
         self.txs.values().cloned().collect()
     }
 
-    //  Index-based lookups 
+    //  Index-based lookups
 
     /// All transactions from a given sender, ordered by nonce (ascending).
     pub fn transactions_by_sender(&self, sender: &Address) -> Vec<Transaction> {
@@ -203,7 +206,7 @@ impl TransactionPool {
         Ok(())
     }
 
-    //  Private index helpers 
+    //  Private index helpers
 
     fn remove_from_sender_index(&mut self, sender: Address, nonce: u64) {
         if let Some(nonces) = self.by_sender.get_mut(&sender) {
@@ -244,7 +247,7 @@ impl TransactionPool {
             .find_map(|(seq, h)| (h == hash).then_some(*seq))
     }
 
-    //  Convenience aliases used by Mempool 
+    //  Convenience aliases used by Mempool
 
     pub fn len(&self) -> usize {
         self.size()
@@ -275,11 +278,11 @@ impl TransactionPool {
                 Some((*hash, tx.clone(), tx.gas_price, tx.from, tx.nonce, seq))
             })
             .min_by(|a, b| {
-                a.2.cmp(&b.2)          // lowest gas price first
-                    .then_with(|| b.3.cmp(&a.3))  // highest sender addr first (worst)
-                    .then_with(|| b.4.cmp(&a.4))  // highest nonce first (worst)
-                    .then_with(|| b.5.cmp(&a.5))  // latest arrival first (worst)
-                    .then_with(|| b.0.cmp(&a.0))  // lexicographically largest hash
+                a.2.cmp(&b.2) // lowest gas price first
+                    .then_with(|| b.3.cmp(&a.3)) // highest sender addr first (worst)
+                    .then_with(|| b.4.cmp(&a.4)) // highest nonce first (worst)
+                    .then_with(|| b.5.cmp(&a.5)) // latest arrival first (worst)
+                    .then_with(|| b.0.cmp(&a.0)) // lexicographically largest hash
             })
             .map(|(hash, tx, _, _, _, _)| (hash, tx))
     }
@@ -303,11 +306,11 @@ impl TransactionPool {
             .collect();
 
         ordered.sort_by(|a, b| {
-            b.0.cmp(&a.0)             // gas_price DESC
-                .then_with(|| a.1.cmp(&b.1))  // sender ASC
-                .then_with(|| a.2.cmp(&b.2))  // nonce ASC
-                .then_with(|| a.3.cmp(&b.3))  // arrival_seq ASC
-                .then_with(|| a.4.cmp(&b.4))  // hash ASC
+            b.0.cmp(&a.0) // gas_price DESC
+                .then_with(|| a.1.cmp(&b.1)) // sender ASC
+                .then_with(|| a.2.cmp(&b.2)) // nonce ASC
+                .then_with(|| a.3.cmp(&b.3)) // arrival_seq ASC
+                .then_with(|| a.4.cmp(&b.4)) // hash ASC
         });
 
         ordered.into_iter().map(|(_, _, _, _, _, tx)| tx).collect()
@@ -324,9 +327,7 @@ impl TransactionPool {
     pub fn expired_transactions(&self, ttl_secs: u64, now: u64) -> Vec<Hash> {
         self.timestamps
             .iter()
-            .filter_map(|(hash, ts)| {
-                (now.saturating_sub(*ts) >= ttl_secs).then_some(*hash)
-            })
+            .filter_map(|(hash, ts)| (now.saturating_sub(*ts) >= ttl_secs).then_some(*hash))
             .collect()
     }
 

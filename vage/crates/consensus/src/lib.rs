@@ -1,46 +1,46 @@
 pub mod consensus_state;
 pub mod fastpath;
+pub mod governance;
 pub mod hotstuff;
 pub mod pos;
 pub mod slashing;
 pub mod upgrades;
-pub mod governance;
 
+use crate::governance::GovernanceManager;
 use crate::hotstuff::pacemaker::Pacemaker;
 use crate::hotstuff::proposer::{ProposalExecution, Proposer};
 use crate::hotstuff::vote::{QuorumCertificate, Vote, VoteCollector};
 use crate::hotstuff::HotStuffPhase;
-use crate::pos::validator_set::ValidatorSet;
 use crate::pos::uptime::UptimeMonitor;
+use crate::pos::validator_set::ValidatorSet;
 use crate::upgrades::{ProtocolVersion, UpgradeManager};
-use crate::governance::GovernanceManager;
 use anyhow::{bail, Result};
 use primitive_types::U256;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 use vage_block::Block;
 use vage_block::BlockBody;
 use vage_execution::TransactionSource;
 use vage_storage::StorageEngine;
 use vage_types::{Address, Transaction, Validator};
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
 
-pub use crate::slashing::{
-    apply_block_slashing, Evidence, Misbehavior, SlashingConfig, SlashingEvent,
-    SlashingEventRpc, SlashingManager,
-};
 pub use crate::consensus_state::{
-    Checkpoint, ConsensusState, ConsensusStateManager, ConsistencyCheck, RestoredConsensus,
     audit_consensus_state_integrity, checkpoint_finalized_block, detect_inconsistent_state,
     enter_safe_recovery_mode, has_proposed_in_view, latest_checkpoint, load_checkpoint,
     load_consensus_state, persist_consensus_state, record_proposal_in_view,
     reject_proposal_below_locked_block, restore_full_consensus, restore_highest_qc,
-    restore_locked_block, restore_pacemaker_view, synchronize_view_with_peers,
+    restore_locked_block, restore_pacemaker_view, synchronize_view_with_peers, Checkpoint,
+    ConsensusState, ConsensusStateManager, ConsistencyCheck, RestoredConsensus,
 };
 pub use crate::fastpath::FastPath;
 pub use crate::hotstuff::proposer::ProposalMessage;
 pub use crate::hotstuff::HotStuff;
 pub use crate::pos::staking::StakingManager;
+pub use crate::slashing::{
+    apply_block_slashing, Evidence, Misbehavior, SlashingConfig, SlashingEvent, SlashingEventRpc,
+    SlashingManager,
+};
 
 const CONSENSUS_VOTE_PREFIX: &[u8] = b"consensus:vote:";
 const CONSENSUS_QC_PREFIX: &[u8] = b"consensus:qc:";
@@ -265,12 +265,14 @@ impl Consensus {
         self.finalized_blocks.insert(block_hash, block.clone());
         // Record uptime for the proposer of the finalized block
         self.uptime_monitor.record_success(&block.header.proposer);
-        let _ = self.staking_manager.reward_validator(&block.header.proposer, U256::from(1000));
+        let _ = self
+            .staking_manager
+            .reward_validator(&block.header.proposer, U256::from(1000));
         self.maybe_rotate_validator_set_for_new_epoch()?;
 
         // Check for missed blocks by other expected validators in this view
         // In a production HotStuff, we would know who was supposed to vote.
-        
+
         self.pacemaker.advance_view();
 
         if let Some(leader) = self.current_leader() {
@@ -596,7 +598,9 @@ impl Consensus {
     fn ensure_committed_block_qc_is_valid(&self, block_hash: [u8; 32]) -> Result<()> {
         let qc = self
             .load_persisted_quorum_certificate(block_hash)?
-            .ok_or_else(|| anyhow::anyhow!("missing quorum certificate for block {:x?}", block_hash))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("missing quorum certificate for block {:x?}", block_hash)
+            })?;
         self.reject_invalid_quorum_certificate(&qc)
     }
 
@@ -664,7 +668,8 @@ impl Consensus {
     }
 
     fn maybe_rotate_validator_set_for_new_epoch(&mut self) -> Result<()> {
-        if self.finalized_block_height == 0 || self.finalized_block_height % self.epoch_length != 0 {
+        if self.finalized_block_height == 0 || self.finalized_block_height % self.epoch_length != 0
+        {
             return Ok(());
         }
 
@@ -705,23 +710,23 @@ impl Consensus {
 
 #[cfg(test)]
 mod tests {
-    use anyhow::Result;
     use super::{
         Consensus, ConsensusNetwork, CONSENSUS_CURRENT_VIEW_KEY, CONSENSUS_QC_PREFIX,
         CONSENSUS_VALIDATOR_SET_KEY, CONSENSUS_VOTE_PREFIX,
     };
     use crate::hotstuff::vote::{QuorumCertificate, Vote};
-    use primitive_types::U256;
-    use vage_block::{Block, BlockBody, BlockHeader};
-    use vage_storage::StorageEngine;
-    use vage_types::validator::ValidatorStatus;
-    use vage_types::{Address, Validator};
+    use anyhow::Result;
     use ed25519_dalek::SigningKey;
+    use primitive_types::U256;
     use std::cell::RefCell;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use vage_block::{Block, BlockBody, BlockHeader};
+    use vage_storage::StorageEngine;
+    use vage_types::validator::ValidatorStatus;
+    use vage_types::{Address, Validator};
 
     #[derive(Default)]
     struct MockConsensusNetwork {
@@ -963,7 +968,9 @@ mod tests {
         bad_signature_vote
             .sign(&inactive_signer)
             .expect("vote signing should succeed even with wrong signer");
-        assert!(consensus.verify_validator_vote(&bad_signature_vote).is_err());
+        assert!(consensus
+            .verify_validator_vote(&bad_signature_vote)
+            .is_err());
 
         let mut zero_power_vote = Vote::new(zero_power.address, block_hash, 0);
         zero_power_vote
@@ -1000,7 +1007,9 @@ mod tests {
             vec![vote_a.signature.to_vec()],
             vec![vote_a.validator],
         );
-        assert!(consensus.reject_invalid_quorum_certificate(&invalid_qc).is_err());
+        assert!(consensus
+            .reject_invalid_quorum_certificate(&invalid_qc)
+            .is_err());
 
         let valid_qc = QuorumCertificate::new(
             block_hash,
@@ -1065,9 +1074,14 @@ mod tests {
             consensus.latest_finalized_block().map(|block| block.hash()),
             Some(block_hash)
         );
-        assert_eq!(consensus.proposer.validator_id, consensus.current_leader().unwrap());
         assert_eq!(
-            storage.latest_block_height().expect("latest height should load"),
+            consensus.proposer.validator_id,
+            consensus.current_leader().unwrap()
+        );
+        assert_eq!(
+            storage
+                .latest_block_height()
+                .expect("latest height should load"),
             1
         );
 
@@ -1084,8 +1098,14 @@ mod tests {
         consensus.update_validator_set(vec![validator_a.clone(), validator_b.clone()]);
 
         assert_eq!(consensus.current_view(), 0);
-        assert_eq!(consensus.current_leader(), consensus.validator_set.get_proposer(0));
-        assert_eq!(consensus.proposer.validator_id, consensus.current_leader().unwrap());
+        assert_eq!(
+            consensus.current_leader(),
+            consensus.validator_set.get_proposer(0)
+        );
+        assert_eq!(
+            consensus.proposer.validator_id,
+            consensus.current_leader().unwrap()
+        );
 
         let stored_view = storage
             .state_get(CONSENSUS_CURRENT_VIEW_KEY.to_vec())
@@ -1096,8 +1116,14 @@ mod tests {
         restored.start().expect("restored consensus should start");
 
         assert_eq!(restored.validator_set.active_validator_count(), 2);
-        assert_eq!(restored.current_leader(), restored.validator_set.get_proposer(0));
-        assert_eq!(restored.proposer.validator_id, restored.current_leader().unwrap());
+        assert_eq!(
+            restored.current_leader(),
+            restored.validator_set.get_proposer(0)
+        );
+        assert_eq!(
+            restored.proposer.validator_id,
+            restored.current_leader().unwrap()
+        );
 
         cleanup_storage(path);
     }
@@ -1135,10 +1161,20 @@ mod tests {
         consensus.pending_blocks.insert(lower_hash, lower);
         consensus.pending_blocks.insert(higher_hash, higher);
 
-        consensus.apply_highest_qc_rule(&QuorumCertificate::new(lower_hash, 1, Vec::new(), Vec::new()));
+        consensus.apply_highest_qc_rule(&QuorumCertificate::new(
+            lower_hash,
+            1,
+            Vec::new(),
+            Vec::new(),
+        ));
         assert_eq!(consensus.highest_qc_block, Some(lower_hash));
 
-        consensus.apply_highest_qc_rule(&QuorumCertificate::new(higher_hash, 2, Vec::new(), Vec::new()));
+        consensus.apply_highest_qc_rule(&QuorumCertificate::new(
+            higher_hash,
+            2,
+            Vec::new(),
+            Vec::new(),
+        ));
         assert_eq!(consensus.highest_qc_block, Some(higher_hash));
 
         cleanup_storage(path);
@@ -1157,7 +1193,9 @@ mod tests {
         let incumbent_hash = incumbent.hash();
         let candidate_hash = candidate.hash();
 
-        consensus.pending_blocks.insert(incumbent_hash, incumbent.clone());
+        consensus
+            .pending_blocks
+            .insert(incumbent_hash, incumbent.clone());
 
         assert!(consensus.detect_fork(&candidate));
 
@@ -1185,7 +1223,9 @@ mod tests {
         let same_height_candidate = block_for(genesis.hash(), 2, validator_b.address);
         let incumbent_hash = incumbent.hash();
 
-        consensus.pending_blocks.insert(incumbent_hash, incumbent.clone());
+        consensus
+            .pending_blocks
+            .insert(incumbent_hash, incumbent.clone());
         assert!(consensus.resolve_fork(&shorter).is_err());
 
         consensus.highest_qc_block = Some(incumbent_hash);
@@ -1205,7 +1245,9 @@ mod tests {
         let genesis = Block::genesis([0u8; 32]);
         let finalized = block_for(genesis.hash(), 1, validator_a.address);
         let candidate = block_for([9u8; 32], 1, validator_b.address);
-        consensus.finalized_blocks.insert(finalized.hash(), finalized);
+        consensus
+            .finalized_blocks
+            .insert(finalized.hash(), finalized);
 
         assert!(consensus.is_conflicting_branch(&candidate));
         assert!(consensus.reject_conflicting_branch(&candidate).is_err());
@@ -1226,7 +1268,12 @@ mod tests {
         let block = block_for([1u8; 32], 2, validator_a.address);
         let mut vote = Vote::new(validator_a.address, block.hash(), 3);
         vote.sign(&signing_key).expect("vote should sign");
-        let qc = QuorumCertificate::new(block.hash(), 3, vec![vote.signature.to_vec()], vec![validator_a.address]);
+        let qc = QuorumCertificate::new(
+            block.hash(),
+            3,
+            vec![vote.signature.to_vec()],
+            vec![validator_a.address],
+        );
         let network = MockConsensusNetwork::default();
 
         consensus
@@ -1239,8 +1286,8 @@ mod tests {
         consensus
             .broadcast_vote_to_peers(&network, &vote)
             .expect("vote broadcast should succeed");
-        let decoded_vote = Vote::decode(&network.votes.borrow()[0])
-            .expect("broadcast vote should deserialize");
+        let decoded_vote =
+            Vote::decode(&network.votes.borrow()[0]).expect("broadcast vote should deserialize");
         assert_eq!(decoded_vote.block_hash, vote.block_hash);
 
         consensus
@@ -1262,11 +1309,16 @@ mod tests {
         consensus
             .synchronize_validator_state_with_network(&network)
             .expect("validator sync should succeed");
-        let synced_validators: Vec<Validator> = bincode::deserialize(&network.validator_syncs.borrow()[0])
-            .expect("validator sync payload should deserialize");
+        let synced_validators: Vec<Validator> =
+            bincode::deserialize(&network.validator_syncs.borrow()[0])
+                .expect("validator sync payload should deserialize");
         assert_eq!(synced_validators.len(), 2);
-        assert!(synced_validators.iter().any(|validator| validator.address == validator_a.address));
-        assert!(synced_validators.iter().any(|validator| validator.address == validator_b.address));
+        assert!(synced_validators
+            .iter()
+            .any(|validator| validator.address == validator_a.address));
+        assert!(synced_validators
+            .iter()
+            .any(|validator| validator.address == validator_b.address));
 
         cleanup_storage(path);
     }
@@ -1290,7 +1342,10 @@ mod tests {
             .request_missing_blocks_from_peers(&network, 4, 2)
             .expect("missing block request should succeed");
 
-        assert_eq!(network.missing_blocks_requests.borrow().as_slice(), &[(4, 2)]);
+        assert_eq!(
+            network.missing_blocks_requests.borrow().as_slice(),
+            &[(4, 2)]
+        );
         assert_eq!(blocks.len(), 2);
         assert_eq!(blocks[0].hash(), block_a.hash());
         assert_eq!(blocks[1].hash(), block_b.hash());
@@ -1338,7 +1393,9 @@ mod tests {
             consensus
                 .persist_current_consensus_view()
                 .expect("view should persist");
-            consensus.stop().expect("consensus stop should persist validator set");
+            consensus
+                .stop()
+                .expect("consensus stop should persist validator set");
         }
 
         let stored_validators: Vec<Validator> = bincode::deserialize(
@@ -1369,13 +1426,18 @@ mod tests {
         assert_eq!(stored_qcs.len(), 1);
 
         let mut restored = with_storage(storage);
-        restored.start().expect("consensus should restore from storage");
+        restored
+            .start()
+            .expect("consensus should restore from storage");
 
         assert_eq!(restored.current_view(), 9);
         assert_eq!(restored.validator_set.active_validator_count(), 2);
         assert_eq!(restored.vote_collector.vote_count(9, block_hash), 2);
         assert_eq!(restored.highest_qc_block, Some(block_hash));
-        assert_eq!(restored.proposer.validator_id, restored.current_leader().unwrap());
+        assert_eq!(
+            restored.proposer.validator_id,
+            restored.current_leader().unwrap()
+        );
 
         cleanup_storage(path);
     }

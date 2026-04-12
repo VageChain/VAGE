@@ -1,4 +1,4 @@
-﻿use anyhow::{bail, Result};
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -18,17 +18,21 @@ use sha2::{Digest, Sha256};
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ZkPublicInputs {
     pub state_root_before: [u8; 32],
-    pub state_root_after:  [u8; 32],
-    pub block_hash:        [u8; 32],
+    pub state_root_after: [u8; 32],
+    pub block_hash: [u8; 32],
 }
 
 impl ZkPublicInputs {
     pub fn new(
         state_root_before: [u8; 32],
-        state_root_after:  [u8; 32],
-        block_hash:        [u8; 32],
+        state_root_after: [u8; 32],
+        block_hash: [u8; 32],
     ) -> Self {
-        Self { state_root_before, state_root_after, block_hash }
+        Self {
+            state_root_before,
+            state_root_after,
+            block_hash,
+        }
     }
 
     /// Deterministic byte encoding used as the public-input wire format passed
@@ -47,12 +51,16 @@ impl ZkPublicInputs {
             bail!("ZkPublicInputs: expected 96 bytes, got {}", bytes.len());
         }
         let mut state_root_before = [0u8; 32];
-        let mut state_root_after  = [0u8; 32];
-        let mut block_hash        = [0u8; 32];
+        let mut state_root_after = [0u8; 32];
+        let mut block_hash = [0u8; 32];
         state_root_before.copy_from_slice(&bytes[0..32]);
-        state_root_after .copy_from_slice(&bytes[32..64]);
-        block_hash       .copy_from_slice(&bytes[64..96]);
-        Ok(Self { state_root_before, state_root_after, block_hash })
+        state_root_after.copy_from_slice(&bytes[32..64]);
+        block_hash.copy_from_slice(&bytes[64..96]);
+        Ok(Self {
+            state_root_before,
+            state_root_after,
+            block_hash,
+        })
     }
 }
 
@@ -76,7 +84,10 @@ pub struct ZkBlockWitness {
 
 impl ZkBlockWitness {
     pub fn new(trace: Sp1ExecutionTrace, public_inputs: ZkPublicInputs) -> Self {
-        Self { trace, public_inputs }
+        Self {
+            trace,
+            public_inputs,
+        }
     }
 }
 

@@ -1,21 +1,6 @@
 use anyhow::Result;
 use ed25519_dalek::SigningKey;
 use libp2p::PeerId;
-use vage_block::{Block, BlockBuilder};
-use vage_consensus::hotstuff::proposer::Proposer;
-use vage_consensus::hotstuff::vote::{QuorumCertificate, Vote};
-use vage_consensus::Consensus;
-use vage_execution::Executor;
-use vage_mempool::{Mempool, MempoolConfig};
-use vage_networking::{
-    ChainSyncState, GossipMessage, L1Request, L1Response, P2PConfig, P2PNetwork,
-    RpcRequestHandler, RpcStateProofQuery, RpcStateProofRequest, RpcStateProofResponse,
-    RpcStateProofValue, RpcSyncClient, RpcVerifiedHeaderEnvelope,
-};
-use vage_state::StateDB;
-use vage_storage::StorageEngine;
-use vage_types::{Address, Transaction, Validator};
-use vage_zk::ZkEngine;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -23,6 +8,21 @@ use std::time::Duration;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio::time::{interval, MissedTickBehavior};
 use tracing::info;
+use vage_block::{Block, BlockBuilder};
+use vage_consensus::hotstuff::proposer::Proposer;
+use vage_consensus::hotstuff::vote::{QuorumCertificate, Vote};
+use vage_consensus::Consensus;
+use vage_execution::Executor;
+use vage_mempool::{Mempool, MempoolConfig};
+use vage_networking::{
+    ChainSyncState, GossipMessage, L1Request, L1Response, P2PConfig, P2PNetwork, RpcRequestHandler,
+    RpcStateProofQuery, RpcStateProofRequest, RpcStateProofResponse, RpcStateProofValue,
+    RpcSyncClient, RpcVerifiedHeaderEnvelope,
+};
+use vage_state::StateDB;
+use vage_storage::StorageEngine;
+use vage_types::{Address, Transaction, Validator};
+use vage_zk::ZkEngine;
 
 #[derive(Clone, Debug)]
 pub enum RpcRequestEvent {
@@ -191,14 +191,19 @@ impl StorageBackedRpcRequestHandler {
             } else {
                 let qc = self
                     .load_quorum_certificate(header.hash())?
-                    .ok_or_else(|| anyhow::anyhow!("missing quorum certificate for header {}", height))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("missing quorum certificate for header {}", height)
+                    })?;
 
                 if !qc.verify_with_voting_power(
                     &validators,
                     quorum_threshold,
                     required_voting_power,
                 )? {
-                    anyhow::bail!("stored quorum certificate failed validation for header {}", height);
+                    anyhow::bail!(
+                        "stored quorum certificate failed validation for header {}",
+                        height
+                    );
                 }
 
                 qc.validators
@@ -231,9 +236,14 @@ impl StorageBackedRpcRequestHandler {
         let persisted_root = self
             .storage
             .state_get(Self::block_state_root_key(request.height))?
-            .ok_or_else(|| anyhow::anyhow!("missing state root for block height {}", request.height))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("missing state root for block height {}", request.height)
+            })?;
         if persisted_root.len() != 32 {
-            anyhow::bail!("invalid persisted state root for block height {}", request.height);
+            anyhow::bail!(
+                "invalid persisted state root for block height {}",
+                request.height
+            );
         }
 
         let (value, proof) = match request.query {
@@ -244,12 +254,14 @@ impl StorageBackedRpcRequestHandler {
                 (RpcStateProofValue::Account(account), proof)
             }
             RpcStateProofQuery::Storage { address, key } => {
-                let (value, proof) = self.storage_backed_state().export_storage_proof_for_height(
-                    request.height,
-                    &address,
-                    key,
-                    request.max_depth,
-                )?;
+                let (value, proof) = self
+                    .storage_backed_state()
+                    .export_storage_proof_for_height(
+                        request.height,
+                        &address,
+                        key,
+                        request.max_depth,
+                    )?;
                 (RpcStateProofValue::Storage(value), proof)
             }
             RpcStateProofQuery::Minimal { key } => {
@@ -283,7 +295,9 @@ impl RpcRequestHandler for StorageBackedRpcRequestHandler {
                     self.storage.get_block_header(height)?,
                     self.storage.get_block_body(height)?,
                 ) {
-                    (Some(header), Some(body)) => Some(bincode::serialize(&Block::new(header, body))?),
+                    (Some(header), Some(body)) => {
+                        Some(bincode::serialize(&Block::new(header, body))?)
+                    }
                     _ => None,
                 };
                 Ok(L1Response::respond_block(block))
@@ -331,7 +345,9 @@ impl Node {
         networking
             .lock()
             .await
-            .set_rpc_handler(Arc::new(StorageBackedRpcRequestHandler::new(storage.clone())));
+            .set_rpc_handler(Arc::new(StorageBackedRpcRequestHandler::new(
+                storage.clone(),
+            )));
 
         // Pass the shared storage engine into Consensus so both use the same DB.
         let mut consensus = Consensus::with_storage(storage.clone());
@@ -442,10 +458,7 @@ impl Node {
         //    Serialises every pending transaction into the redb mempool table.
         //    On restart, `restore_mempool_state` will re-insert them.
         let persisted_mempool = self.mempool.persist_mempool_transactions_to_disk()?;
-        info!(
-            "flushed {} pending transactions to disk",
-            persisted_mempool
-        );
+        info!("flushed {} pending transactions to disk", persisted_mempool);
 
         // Ã¢â€â‚¬Ã¢â€â‚¬ Step 4: persist state root Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         //    Commit the in-memory state trie and store the resulting Merkle
@@ -577,7 +590,8 @@ impl Node {
             }
             GossipMessage::QuorumCertificate(payload) => {
                 let qc = QuorumCertificate::decode(&payload)?;
-                self.handle_consensus_event(ConsensusEvent::QuorumCertificate(qc)).await?;
+                self.handle_consensus_event(ConsensusEvent::QuorumCertificate(qc))
+                    .await?;
             }
             GossipMessage::StateSync(_) => {
                 info!("received state sync gossip message");
@@ -620,7 +634,7 @@ impl Node {
                 if consensus.finalized_block_height > previous_finalized_height {
                     if let Some(block) = consensus.latest_finalized_block() {
                         drop(consensus); // release lock before await
-                        // Track 5: record the time from vote receipt to finalization.
+                                         // Track 5: record the time from vote receipt to finalization.
                         crate::metrics::MetricsService::record_consensus_latency(
                             vote_received_at.elapsed(),
                         );
@@ -669,10 +683,7 @@ impl Node {
         //    success, atomically inserts the transaction into the pool and
         //    persists it to disk.
         let tx_hash = self.mempool.add_transaction(transaction.clone())?;
-        info!(
-            "rpc transaction accepted: hash=0x{}",
-            hex::encode(tx_hash)
-        );
+        info!("rpc transaction accepted: hash=0x{}", hex::encode(tx_hash));
 
         // Ã¢â€â‚¬Ã¢â€â‚¬ Step 4: broadcast transaction to P2P peers.
         //    `broadcast_new_transaction_to_peers` checks the gossip tracker so
@@ -789,7 +800,10 @@ impl Node {
                     zk_err
                 );
             } else {
-                info!("ZK block validity proof stored for height={}", block.height());
+                info!(
+                    "ZK block validity proof stored for height={}",
+                    block.height()
+                );
             }
         } else {
             info!(
@@ -812,7 +826,11 @@ impl Node {
         //    Evicts expired unrevealed commits and enables the pool to serve
         //    the next block's randomized, sandwich-protected transaction list.
         if let Err(mev_err) = self.mempool.on_block_height(block.height()) {
-            tracing::warn!("MEV pool clock advance failed at height={}: {} (non-fatal)", block.height(), mev_err);
+            tracing::warn!(
+                "MEV pool clock advance failed at height={}: {} (non-fatal)",
+                block.height(),
+                mev_err
+            );
         }
 
         // Ã¢â€â‚¬Ã¢â€â‚¬ Step 6: update the local chain head pointer.
@@ -843,8 +861,7 @@ impl Node {
         if let Some(leader) = consensus.current_leader() {
             leader == self.validator_address
         } else {
-            self.local_proposer()
-                .is_leader(consensus.current_view())
+            self.local_proposer().is_leader(consensus.current_view())
         }
     }
 
@@ -1025,10 +1042,7 @@ impl Node {
 
         info!(
             "sync complete from peer {:?}: applied={}, remote_height={}, new_head={}",
-            peer_id,
-            outcome.applied_blocks,
-            outcome.remote_height,
-            outcome.new_local_head
+            peer_id, outcome.applied_blocks, outcome.remote_height, outcome.new_local_head
         );
 
         Ok(())
@@ -1090,13 +1104,13 @@ mod tests {
     use super::{ConsensusEvent, Node, NodeConfig};
     use ed25519_dalek::SigningKey;
     use primitive_types::U256;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use vage_block::{Block, BlockBody, BlockHeader};
     use vage_consensus::hotstuff::vote::Vote;
     use vage_types::validator::ValidatorStatus;
     use vage_types::{Address, Validator};
-    use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_storage_path(name: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -1125,7 +1139,12 @@ mod tests {
         validator
     }
 
-    fn block_for(parent_hash: [u8; 32], height: u64, proposer: Address, state_root: [u8; 32]) -> Block {
+    fn block_for(
+        parent_hash: [u8; 32],
+        height: u64,
+        proposer: Address,
+        state_root: [u8; 32],
+    ) -> Block {
         let mut header = BlockHeader::new(parent_hash, height);
         header.proposer = proposer;
         header.state_root = state_root;
@@ -1166,10 +1185,18 @@ mod tests {
 
         let consensus = node.consensus.read().await;
         assert_eq!(consensus.finalized_block_height, 1);
-        assert_eq!(consensus.latest_finalized_block().map(|block| block.hash()), Some(block_hash));
+        assert_eq!(
+            consensus.latest_finalized_block().map(|block| block.hash()),
+            Some(block_hash)
+        );
         drop(consensus);
 
-        assert_eq!(node.storage.latest_block_height().expect("height should load"), 1);
+        assert_eq!(
+            node.storage
+                .latest_block_height()
+                .expect("height should load"),
+            1
+        );
         assert_eq!(node.chain_head, Some(block_hash));
         assert_eq!(
             node.storage

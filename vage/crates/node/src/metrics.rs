@@ -79,8 +79,7 @@ impl MetricsService {
     /// just after the P2P broadcast completes.  Exposed as a histogram so
     /// p50/p95/p99 latencies are visible in Prometheus.
     pub fn record_block_production_time(duration: Duration) {
-        metrics::histogram!("node.block_production_time_ms")
-            .record(duration.as_millis() as f64);
+        metrics::histogram!("node.block_production_time_ms").record(duration.as_millis() as f64);
     }
 
     /// Track 5 — record the consensus round latency.
@@ -89,7 +88,6 @@ impl MetricsService {
     /// moment a new block is finalized as a result of that vote forming a QC.
     /// High values indicate slow quorum formation or network partitions.
     pub fn record_consensus_latency(duration: Duration) {
-        metrics::histogram!("node.consensus_latency_ms")
-            .record(duration.as_millis() as f64);
+        metrics::histogram!("node.consensus_latency_ms").record(duration.as_millis() as f64);
     }
 }

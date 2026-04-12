@@ -5,12 +5,7 @@ use vage_execution::GasMeter;
 use vage_types::{Address, Transaction};
 
 fn make_tx() -> Transaction {
-    Transaction::new_transfer(
-        Address([9u8; 32]),
-        Address([8u8; 32]),
-        U256::from(10u64),
-        7,
-    )
+    Transaction::new_transfer(Address([9u8; 32]), Address([8u8; 32]), U256::from(10u64), 7)
 }
 
 fn bench_intrinsic_gas(c: &mut Criterion) {
@@ -36,7 +31,9 @@ fn bench_gas_meter_ops(c: &mut Criterion) {
         b.iter(|| {
             let mut meter = GasMeter::new(100_000);
             for _ in 0..100 {
-                meter.consume(black_box(100)).expect("consume should fit limit");
+                meter
+                    .consume(black_box(100))
+                    .expect("consume should fit limit");
             }
             meter.refund(black_box(5_000));
             black_box(meter.calculate_fee(&tx));

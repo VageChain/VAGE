@@ -1,9 +1,9 @@
 use crate::gas::{self, GasMeter};
 use anyhow::{anyhow, bail, Result};
-use vage_state::StateDb;
-use vage_types::{Account, Transaction};
 use primitive_types::U256;
 use std::sync::Arc;
+use vage_state::StateDb;
+use vage_types::{Account, Transaction};
 
 pub struct StateTransition {
     pub tx: Transaction,
@@ -110,7 +110,8 @@ impl StateTransition {
         sender.validate()?;
         self.state.update_account(&self.tx.from, &sender)?;
 
-        let contract_address = vage_types::Address::from(vage_crypto::hash::sha256(&self.tx.hash()));
+        let contract_address =
+            vage_types::Address::from(vage_crypto::hash::sha256(&self.tx.hash()));
         let mut contract = self
             .state
             .get_account(&contract_address)?
@@ -268,12 +269,12 @@ mod tests {
     use crate::gas;
     use ed25519_dalek::SigningKey;
     use primitive_types::U256;
-    use vage_state::StateDB;
-    use vage_storage::{Schema, StorageEngine};
-    use vage_types::{Account, Address, Transaction};
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use vage_state::StateDB;
+    use vage_storage::{Schema, StorageEngine};
+    use vage_types::{Account, Address, Transaction};
 
     fn temp_db_path(name: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -310,7 +311,8 @@ mod tests {
     fn signed_transfer(from_key: &SigningKey, to: Address, value: u64, nonce: u64) -> Transaction {
         let from = Address::from_public_key(&from_key.verifying_key().to_bytes());
         let mut tx = Transaction::new_transfer(from, to, U256::from(value), nonce);
-        tx.sign(from_key).expect("transaction signing should succeed");
+        tx.sign(from_key)
+            .expect("transaction signing should succeed");
         tx
     }
 
@@ -323,7 +325,8 @@ mod tests {
     ) -> Transaction {
         let from = Address::from_public_key(&from_key.verifying_key().to_bytes());
         let mut tx = Transaction::new_contract_call(from, to, U256::from(value), nonce, data);
-        tx.sign(from_key).expect("transaction signing should succeed");
+        tx.sign(from_key)
+            .expect("transaction signing should succeed");
         tx
     }
 
@@ -335,19 +338,23 @@ mod tests {
     ) -> Transaction {
         let from = Address::from_public_key(&from_key.verifying_key().to_bytes());
         let mut tx = Transaction::new_contract_deploy(from, U256::from(value), nonce, code);
-        tx.sign(from_key).expect("transaction signing should succeed");
+        tx.sign(from_key)
+            .expect("transaction signing should succeed");
         tx
     }
 
     #[test]
     fn gas_meter_helpers_cover_limits_fees_and_refunds() {
-        let tx = Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(1u64), 0);
+        let tx =
+            Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(1u64), 0);
         // Use a fixed limit large enough that consume(1_000) succeeds.
         let gas_limit = 10_000u64;
         let mut gas_meter = GasMeter::new(gas_limit);
         let mut account = funded_account(Address([1u8; 32]), 100_000);
 
-        gas_meter.consume(1_000).expect("gas consume should succeed");
+        gas_meter
+            .consume(1_000)
+            .expect("gas consume should succeed");
         assert_eq!(gas_meter.remaining(), gas_limit - 1_000);
         assert!(!gas_meter.out_of_gas());
         assert_eq!(gas_meter.calculate_fee(&tx), U256::from(1_000u64));
@@ -361,11 +368,18 @@ mod tests {
 
         // Build a fee transaction whose gas_limit matches the meter limit.
         let fee_tx = {
-            let mut t = Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(1u64), 0);
+            let mut t = Transaction::new_transfer(
+                Address([1u8; 32]),
+                Address([2u8; 32]),
+                U256::from(1u64),
+                0,
+            );
             t.gas_limit = gas_limit;
             t
         };
-        let prepaid = gas_meter.deduct_fee(&mut account, &fee_tx).expect("fee deduction should succeed");
+        let prepaid = gas_meter
+            .deduct_fee(&mut account, &fee_tx)
+            .expect("fee deduction should succeed");
         assert_eq!(prepaid, fee_tx.gas_cost());
         let refund = gas_meter.refund_unused(&mut account, &fee_tx);
         assert_eq!(refund, fee_tx.gas_cost() - U256::from(1_000u64));
@@ -381,8 +395,12 @@ mod tests {
         let sender_key = signing_key(1);
         let sender = Address::from_public_key(&sender_key.verifying_key().to_bytes());
         let receiver = Address([3u8; 32]);
-        state.update_account(&sender, &funded_account(sender, 400_000)).expect("sender update should succeed");
-        state.update_account(&receiver, &funded_account(receiver, 25)).expect("receiver update should succeed");
+        state
+            .update_account(&sender, &funded_account(sender, 400_000))
+            .expect("sender update should succeed");
+        state
+            .update_account(&receiver, &funded_account(receiver, 25))
+            .expect("receiver update should succeed");
 
         let tx = signed_transfer(&sender_key, receiver, 1_500, 0);
         let mut transition = StateTransition::new(tx.clone(), state.clone());
@@ -391,8 +409,16 @@ mod tests {
 
         let root = transition.apply().expect("transfer apply should succeed");
         assert_eq!(root, state.state_root());
-        assert_eq!(state.get_nonce(&sender).expect("nonce read should succeed"), 1);
-        assert_eq!(state.get_balance(&receiver).expect("receiver balance read should succeed"), U256::from(1_525u64));
+        assert_eq!(
+            state.get_nonce(&sender).expect("nonce read should succeed"),
+            1
+        );
+        assert_eq!(
+            state
+                .get_balance(&receiver)
+                .expect("receiver balance read should succeed"),
+            U256::from(1_525u64)
+        );
 
         cleanup(storage, state, path);
     }
@@ -405,21 +431,45 @@ mod tests {
         let contract = Address([4u8; 32]);
         let data = vec![7u8, 8, 9];
 
-        state.update_account(&sender, &funded_account(sender, 500_000)).expect("sender update should succeed");
+        state
+            .update_account(&sender, &funded_account(sender, 500_000))
+            .expect("sender update should succeed");
         let mut contract_account = funded_account(contract, 0);
         contract_account.apply_contract_deploy([6u8; 32]);
-        state.update_account(&contract, &contract_account).expect("contract update should succeed");
+        state
+            .update_account(&contract, &contract_account)
+            .expect("contract update should succeed");
 
         let tx = signed_contract_call(&sender_key, contract, 900, 0, data.clone());
         let transition = StateTransition::new(tx.clone(), state.clone());
-        transition.write_contract_storage().expect("storage write should succeed");
-        assert_eq!(transition.read_contract_storage().expect("storage read should succeed"), Some(tx.hash()));
+        transition
+            .write_contract_storage()
+            .expect("storage write should succeed");
+        assert_eq!(
+            transition
+                .read_contract_storage()
+                .expect("storage read should succeed"),
+            Some(tx.hash())
+        );
 
         let mut transition = StateTransition::new(tx.clone(), state.clone());
-        let root = transition.apply_contract_call().and_then(|_| transition.commit_changes()).expect("contract call should succeed");
+        let root = transition
+            .apply_contract_call()
+            .and_then(|_| transition.commit_changes())
+            .expect("contract call should succeed");
         assert_eq!(root, state.state_root());
-        assert_eq!(state.get_balance(&contract).expect("contract balance read should succeed"), U256::from(900u64));
-        assert_eq!(state.get_nonce(&sender).expect("sender nonce read should succeed"), 1);
+        assert_eq!(
+            state
+                .get_balance(&contract)
+                .expect("contract balance read should succeed"),
+            U256::from(900u64)
+        );
+        assert_eq!(
+            state
+                .get_nonce(&sender)
+                .expect("sender nonce read should succeed"),
+            1
+        );
 
         cleanup(storage, state, path);
     }
@@ -430,18 +480,30 @@ mod tests {
         let sender_key = signing_key(3);
         let sender = Address::from_public_key(&sender_key.verifying_key().to_bytes());
         let code = vec![1u8, 2, 3, 4];
-        state.update_account(&sender, &funded_account(sender, 2_500_000)).expect("sender update should succeed");
+        state
+            .update_account(&sender, &funded_account(sender, 2_500_000))
+            .expect("sender update should succeed");
 
         let tx = signed_contract_deploy(&sender_key, 500, 0, code.clone());
         let mut transition = StateTransition::new(tx.clone(), state.clone());
-        let root = transition.apply().expect("contract deploy apply should succeed");
+        let root = transition
+            .apply()
+            .expect("contract deploy apply should succeed");
 
         let contract_address = Address::from(vage_crypto::hash::sha256(&tx.hash()));
-        let contract = state.get_account(&contract_address).expect("contract load should succeed").expect("contract should exist");
+        let contract = state
+            .get_account(&contract_address)
+            .expect("contract load should succeed")
+            .expect("contract should exist");
         assert_eq!(root, state.state_root());
         assert!(contract.is_contract());
         assert_eq!(contract.balance, U256::from(500u64));
-        assert_eq!(state.get_nonce(&sender).expect("sender nonce read should succeed"), 1);
+        assert_eq!(
+            state
+                .get_nonce(&sender)
+                .expect("sender nonce read should succeed"),
+            1
+        );
 
         cleanup(storage, state, path);
     }
@@ -452,17 +514,33 @@ mod tests {
         let sender_key = signing_key(4);
         let sender = Address::from_public_key(&sender_key.verifying_key().to_bytes());
         let receiver = Address([9u8; 32]);
-        state.update_account(&sender, &funded_account(sender, 300_000)).expect("sender update should succeed");
-        state.update_account(&receiver, &funded_account(receiver, 50)).expect("receiver update should succeed");
+        state
+            .update_account(&sender, &funded_account(sender, 300_000))
+            .expect("sender update should succeed");
+        state
+            .update_account(&receiver, &funded_account(receiver, 50))
+            .expect("receiver update should succeed");
 
         let tx = signed_transfer(&sender_key, receiver, 750, 0);
         let transition = StateTransition::new(tx.clone(), state.clone());
-        transition.validate_post_state().expect("post state validation should succeed");
+        transition
+            .validate_post_state()
+            .expect("post state validation should succeed");
 
-        let mut sender_account = state.get_account(&sender).expect("sender read should succeed").expect("sender should exist");
-        let mut receiver_account = state.get_account(&receiver).expect("receiver read should succeed").expect("receiver should exist");
-        transition.update_sender_balance(&mut sender_account, tx.value).expect("sender balance update should succeed");
-        transition.update_receiver_balance(&mut receiver_account, tx.value).expect("receiver balance update should succeed");
+        let mut sender_account = state
+            .get_account(&sender)
+            .expect("sender read should succeed")
+            .expect("sender should exist");
+        let mut receiver_account = state
+            .get_account(&receiver)
+            .expect("receiver read should succeed")
+            .expect("receiver should exist");
+        transition
+            .update_sender_balance(&mut sender_account, tx.value)
+            .expect("sender balance update should succeed");
+        transition
+            .update_receiver_balance(&mut receiver_account, tx.value)
+            .expect("receiver balance update should succeed");
         transition.increment_nonce(&mut sender_account);
         assert_eq!(sender_account.nonce, 1);
         assert_eq!(receiver_account.balance, U256::from(800u64));
@@ -470,10 +548,19 @@ mod tests {
         let committed_root = transition.commit_changes().expect("commit should succeed");
         assert_eq!(transition.calculate_state_root(), committed_root);
 
-        state.set_balance(&receiver, U256::from(999u64)).expect("balance mutation should succeed");
-        let reverted_root = transition.revert_on_failure().expect("revert should succeed");
+        state
+            .set_balance(&receiver, U256::from(999u64))
+            .expect("balance mutation should succeed");
+        let reverted_root = transition
+            .revert_on_failure()
+            .expect("revert should succeed");
         assert_eq!(reverted_root, committed_root);
-        assert_eq!(state.get_balance(&receiver).expect("receiver balance read should succeed"), U256::from(50u64));
+        assert_eq!(
+            state
+                .get_balance(&receiver)
+                .expect("receiver balance read should succeed"),
+            U256::from(50u64)
+        );
 
         let mut bad_nonce_tx = tx.clone();
         bad_nonce_tx.nonce = 7;
@@ -490,13 +577,21 @@ mod tests {
         let sender = Address::from_public_key(&sender_key.verifying_key().to_bytes());
         let receiver = Address([10u8; 32]);
         let plain_account = Address([11u8; 32]);
-        state.update_account(&sender, &funded_account(sender, 500_000)).expect("sender update should succeed");
-        state.update_account(&receiver, &funded_account(receiver, 0)).expect("receiver update should succeed");
-        state.update_account(&plain_account, &funded_account(plain_account, 0)).expect("plain account update should succeed");
+        state
+            .update_account(&sender, &funded_account(sender, 500_000))
+            .expect("sender update should succeed");
+        state
+            .update_account(&receiver, &funded_account(receiver, 0))
+            .expect("receiver update should succeed");
+        state
+            .update_account(&plain_account, &funded_account(plain_account, 0))
+            .expect("plain account update should succeed");
 
         let tx = signed_transfer(&sender_key, receiver, 1_000, 0);
         let manager = StateTransitionManager::new(state.clone());
-        let root = manager.apply_transactions(&[tx], state.state_root()).expect("manager apply should succeed");
+        let root = manager
+            .apply_transactions(&[tx], state.state_root())
+            .expect("manager apply should succeed");
         assert_eq!(root, state.state_root());
 
         let call_tx = signed_contract_call(&sender_key, plain_account, 1, 1, vec![1u8]);

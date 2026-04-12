@@ -1,11 +1,11 @@
 use anyhow::Result;
-use vage_block::Block;
-use vage_types::BlockHeight;
-use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
+use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::time::Duration;
 use tracing::{info, warn};
+use vage_block::Block;
+use vage_types::BlockHeight;
 
-/// The BlockIndexer crawls the VageChain RPC node and populates a high-performance 
+/// The BlockIndexer crawls the VageChain RPC node and populates a high-performance
 /// relational database for the frontend dashboard.
 pub struct BlockIndexer {
     pool: SqlitePool,
@@ -19,9 +19,9 @@ impl BlockIndexer {
             .filename(db_url)
             .create_if_missing(true);
         let pool = SqlitePool::connect_with(options).await?;
-        
+
         Self::initialize_schema(&pool).await?;
-        
+
         Ok(Self {
             pool,
             rpc_url: rpc_url.to_owned(),
@@ -53,23 +53,29 @@ impl BlockIndexer {
                 balance TEXT NOT NULL,
                 nonce INTEGER NOT NULL,
                 last_updated_height INTEGER NOT NULL
-            );"
-        ).execute(pool).await?;
-        
+            );",
+        )
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
 
     pub async fn run(&mut self) -> Result<()> {
         info!("Starting Block Explorer Indexer... RPC: {}", self.rpc_url);
-        
+
         loop {
             match self.fetch_latest_height().await {
                 Ok(latest) if latest > self.current_height => {
-                    info!("Syncing from height {} to {}", self.current_height + 1, latest);
+                    info!(
+                        "Syncing from height {} to {}",
+                        self.current_height + 1,
+                        latest
+                    );
                     for height in (self.current_height + 1)..=latest {
                         if let Err(e) = self.index_block(height).await {
-                             warn!("Failed to index block at height {}: {:?}", height, e);
-                             break;
+                            warn!("Failed to index block at height {}: {:?}", height, e);
+                            break;
                         }
                         self.current_height = height;
                     }
@@ -83,23 +89,30 @@ impl BlockIndexer {
 
     async fn fetch_latest_height(&self) -> Result<BlockHeight> {
         let client = reqwest::Client::new();
-        let response: serde_json::Value = client.post(&self.rpc_url)
+        let response: serde_json::Value = client
+            .post(&self.rpc_url)
             .json(&serde_json::json!({
                 "jsonrpc": "2.0",
                 "method": "eth_blockNumber",
                 "params": [],
                 "id": 1
             }))
-            .send().await?.json().await?;
-            
+            .send()
+            .await?
+            .json()
+            .await?;
+
         let height_hex = response["result"].as_str().unwrap_or("0x0");
-        Ok(u64::from_str_radix(height_hex.trim_start_matches("0x"), 16)?)
+        Ok(u64::from_str_radix(
+            height_hex.trim_start_matches("0x"),
+            16,
+        )?)
     }
 
     async fn index_block(&self, height: BlockHeight) -> Result<()> {
         // Fetch full block details from RPC
         let block: Block = self.fetch_block_from_rpc(height).await?;
-        
+
         let hash = block.hash();
         let parent_hash = block.parent_hash();
         let proposer = block.header.proposer.as_bytes();
@@ -137,15 +150,19 @@ impl BlockIndexer {
 
     async fn fetch_block_from_rpc(&self, height: BlockHeight) -> Result<Block> {
         let client = reqwest::Client::new();
-        let response: serde_json::Value = client.post(&self.rpc_url)
+        let response: serde_json::Value = client
+            .post(&self.rpc_url)
             .json(&serde_json::json!({
                 "jsonrpc": "2.0",
                 "method": "vage_getBlockByNumber",
                 "params": [format!("0x{:x}", height), true],
                 "id": 1
             }))
-            .send().await?.json().await?;
-            
+            .send()
+            .await?
+            .json()
+            .await?;
+
         Ok(serde_json::from_value(response["result"].clone())?)
     }
 }

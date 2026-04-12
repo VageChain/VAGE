@@ -1,18 +1,18 @@
 use crate::node::{ConsensusEvent, NodeEvent};
 use anyhow::Result;
-use vage_execution::Executor;
-use vage_light_client::LightClient;
-use vage_mempool::Mempool;
-use vage_block::BlockHeader;
-use vage_networking::P2PNetwork;
-use vage_state::StateDB;
-use vage_storage::StorageEngine;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 use tokio::time::interval;
 use tracing::info;
+use vage_block::BlockHeader;
+use vage_execution::Executor;
+use vage_light_client::LightClient;
+use vage_mempool::Mempool;
+use vage_networking::P2PNetwork;
+use vage_state::StateDB;
+use vage_storage::StorageEngine;
 
 #[derive(Clone, Debug)]
 pub struct ServiceConfig {
@@ -150,7 +150,7 @@ impl ServiceManager {
             let mut ticker = interval(config.peer_discovery_interval);
             loop {
                 ticker.tick().await;
-                    networking.lock().await.trigger_peer_discovery()?;
+                networking.lock().await.trigger_peer_discovery()?;
             }
         });
     }
@@ -236,7 +236,9 @@ impl ServiceManager {
                             peer_id,
                             BlockHeader::genesis(),
                         ));
-                        light_client.as_ref().expect("light client should initialize")
+                        light_client
+                            .as_ref()
+                            .expect("light client should initialize")
                     }
                 };
                 if let Err(error) = client.run_sync_loop().await {

@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use vage_types::Address;
-use serde::{Deserialize, Serialize};
 
 /// Tracks the block production performance of validators to enforce uptime rules.
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

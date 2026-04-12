@@ -4,13 +4,13 @@ use crate::verkle_tree::VerkleTree;
 use anyhow::{bail, Result};
 use parking_lot::Mutex;
 use primitive_types::U256;
+use std::collections::{BTreeSet, HashMap};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use vage_block::Block;
 use vage_crypto::hash::sha256;
 use vage_storage::StorageEngine;
 use vage_types::{Account, Address, Transaction};
-use std::collections::{BTreeSet, HashMap};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 const ACCOUNT_PREFIX: &[u8] = b"account:";
 const STORAGE_PREFIX: &[u8] = b"storage:";
@@ -1069,7 +1069,8 @@ impl StateDb {
         }
 
         for snapshot_height in chain {
-            let prefix = Self::snapshot_prefix_for_height(SNAPSHOT_INCREMENTAL_PREFIX, snapshot_height);
+            let prefix =
+                Self::snapshot_prefix_for_height(SNAPSHOT_INCREMENTAL_PREFIX, snapshot_height);
             for (snapshot_key, value) in self.storage.state_prefix_scan(prefix)? {
                 if let Some(original_key) = Self::decode_snapshot_state_entry_key(&snapshot_key) {
                     if value == SNAPSHOT_TOMBSTONE {
@@ -1170,15 +1171,15 @@ impl StateDb {
 mod tests {
     use super::{StateBatchOp, StateDb};
     use primitive_types::U256;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use vage_block::{Block, BlockBody, BlockHeader};
     use vage_crypto::hash::sha256;
     use vage_storage::{Schema, StorageEngine};
     use vage_types::{Account, Address, Receipt, Transaction};
-    use std::path::PathBuf;
-    use std::sync::Arc;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
-    use crate::{VerkleNode, verkle_tree::VerkleTree};
+    use crate::{verkle_tree::VerkleTree, VerkleNode};
 
     fn temp_db_path(name: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -1206,8 +1207,18 @@ mod tests {
         let (storage, state, path) = test_db("new");
 
         assert_eq!(state.state_root(), VerkleTree::new().root_commitment());
-        assert_eq!(state.get_balance(&Address([1u8; 32])).expect("balance read should succeed"), U256::zero());
-        assert_eq!(state.get_nonce(&Address([1u8; 32])).expect("nonce read should succeed"), 0);
+        assert_eq!(
+            state
+                .get_balance(&Address([1u8; 32]))
+                .expect("balance read should succeed"),
+            U256::zero()
+        );
+        assert_eq!(
+            state
+                .get_nonce(&Address([1u8; 32]))
+                .expect("nonce read should succeed"),
+            0
+        );
 
         cleanup(storage, path);
     }
@@ -1224,11 +1235,31 @@ mod tests {
             .update_account(&address, &account)
             .expect("account update should succeed");
 
-        assert_eq!(state.load_account(&address).expect("load account should succeed"), Some(account.clone()));
-        assert_eq!(state.get_account(&address).expect("get account should succeed"), Some(account.clone()));
-        assert_eq!(state.get_balance(&address).expect("get balance should succeed"), U256::from(55u64));
-        assert_eq!(state.get_nonce(&address).expect("get nonce should succeed"), 7);
-        assert!(state.account_exists(&address).expect("existence check should succeed"));
+        assert_eq!(
+            state
+                .load_account(&address)
+                .expect("load account should succeed"),
+            Some(account.clone())
+        );
+        assert_eq!(
+            state
+                .get_account(&address)
+                .expect("get account should succeed"),
+            Some(account.clone())
+        );
+        assert_eq!(
+            state
+                .get_balance(&address)
+                .expect("get balance should succeed"),
+            U256::from(55u64)
+        );
+        assert_eq!(
+            state.get_nonce(&address).expect("get nonce should succeed"),
+            7
+        );
+        assert!(state
+            .account_exists(&address)
+            .expect("existence check should succeed"));
 
         cleanup(storage, path);
     }
@@ -1238,11 +1269,31 @@ mod tests {
         let (storage, state, path) = test_db("missing-account");
         let address = Address([3u8; 32]);
 
-        assert_eq!(state.load_account(&address).expect("load account should succeed"), None);
-        assert_eq!(state.get_account(&address).expect("get account should succeed"), None);
-        assert_eq!(state.get_balance(&address).expect("get balance should succeed"), U256::zero());
-        assert_eq!(state.get_nonce(&address).expect("get nonce should succeed"), 0);
-        assert!(!state.account_exists(&address).expect("existence check should succeed"));
+        assert_eq!(
+            state
+                .load_account(&address)
+                .expect("load account should succeed"),
+            None
+        );
+        assert_eq!(
+            state
+                .get_account(&address)
+                .expect("get account should succeed"),
+            None
+        );
+        assert_eq!(
+            state
+                .get_balance(&address)
+                .expect("get balance should succeed"),
+            U256::zero()
+        );
+        assert_eq!(
+            state.get_nonce(&address).expect("get nonce should succeed"),
+            0
+        );
+        assert!(!state
+            .account_exists(&address)
+            .expect("existence check should succeed"));
 
         cleanup(storage, path);
     }
@@ -1284,18 +1335,30 @@ mod tests {
             .create_account(address)
             .expect("account creation should succeed");
         assert_eq!(created.address, address);
-        assert!(state.account_exists(&address).expect("existence check should succeed"));
+        assert!(state
+            .account_exists(&address)
+            .expect("existence check should succeed"));
 
         state
             .set_balance(&address, U256::from(99u64))
             .expect("balance update should succeed");
-        assert_eq!(state.get_balance(&address).expect("balance read should succeed"), U256::from(99u64));
+        assert_eq!(
+            state
+                .get_balance(&address)
+                .expect("balance read should succeed"),
+            U256::from(99u64)
+        );
 
         let nonce = state
             .increment_nonce(&address)
             .expect("nonce increment should succeed");
         assert_eq!(nonce, 1);
-        assert_eq!(state.get_nonce(&address).expect("nonce read should succeed"), 1);
+        assert_eq!(
+            state
+                .get_nonce(&address)
+                .expect("nonce read should succeed"),
+            1
+        );
 
         cleanup(storage, path);
     }
@@ -1316,7 +1379,12 @@ mod tests {
             .expect("account load should succeed")
             .expect("account should exist after storage write");
 
-        assert_eq!(state.get_storage(&address, slot).expect("storage read should succeed"), Some(value));
+        assert_eq!(
+            state
+                .get_storage(&address, slot)
+                .expect("storage read should succeed"),
+            Some(value)
+        );
         assert_ne!(account.storage_root, [0u8; 32]);
 
         cleanup(storage, path);
@@ -1334,8 +1402,15 @@ mod tests {
             .delete_account(&address)
             .expect("account deletion should succeed");
 
-        assert!(!state.account_exists(&address).expect("existence check should succeed"));
-        assert_eq!(state.get_account(&address).expect("account read should succeed"), None);
+        assert!(!state
+            .account_exists(&address)
+            .expect("existence check should succeed"));
+        assert_eq!(
+            state
+                .get_account(&address)
+                .expect("account read should succeed"),
+            None
+        );
 
         cleanup(storage, path);
     }
@@ -1358,11 +1433,23 @@ mod tests {
             .expect("transaction application should succeed");
 
         assert_eq!(
-            state.get_balance(&from).expect("sender balance read should succeed"),
+            state
+                .get_balance(&from)
+                .expect("sender balance read should succeed"),
             U256::from(100_000u64) - U256::from(500u64) - gas_cost
         );
-        assert_eq!(state.get_nonce(&from).expect("sender nonce read should succeed"), 1);
-        assert_eq!(state.get_balance(&to).expect("recipient balance read should succeed"), U256::from(500u64));
+        assert_eq!(
+            state
+                .get_nonce(&from)
+                .expect("sender nonce read should succeed"),
+            1
+        );
+        assert_eq!(
+            state
+                .get_balance(&to)
+                .expect("recipient balance read should succeed"),
+            U256::from(500u64)
+        );
 
         cleanup(storage, path);
     }
@@ -1389,11 +1476,23 @@ mod tests {
         let mut block = Block::new(header, body);
         block.compute_roots();
 
-        let resulting_root = state.apply_block(&block).expect("block application should succeed");
+        let resulting_root = state
+            .apply_block(&block)
+            .expect("block application should succeed");
 
         assert_eq!(resulting_root, state.state_root());
-        assert_eq!(state.get_nonce(&from).expect("sender nonce read should succeed"), 1);
-        assert_eq!(state.get_balance(&to).expect("recipient balance read should succeed"), U256::from(750u64));
+        assert_eq!(
+            state
+                .get_nonce(&from)
+                .expect("sender nonce read should succeed"),
+            1
+        );
+        assert_eq!(
+            state
+                .get_balance(&to)
+                .expect("recipient balance read should succeed"),
+            U256::from(750u64)
+        );
 
         cleanup(storage, path);
     }
@@ -1445,7 +1544,12 @@ mod tests {
         assert!(state
             .verify_state_root(committed_root)
             .expect("rolled back root verification should succeed"));
-        assert_eq!(state.get_balance(&address).expect("balance read should succeed"), U256::from(100u64));
+        assert_eq!(
+            state
+                .get_balance(&address)
+                .expect("balance read should succeed"),
+            U256::from(100u64)
+        );
     }
 
     #[test]
@@ -1502,21 +1606,36 @@ mod tests {
             .snapshot_state(1)
             .expect("snapshot one should succeed");
 
-        assert_eq!(state.get_balance(&address).expect("balance read should succeed"), U256::from(75u64));
+        assert_eq!(
+            state
+                .get_balance(&address)
+                .expect("balance read should succeed"),
+            U256::from(75u64)
+        );
 
         let restored_zero = state
             .load_snapshot(0)
             .expect("loading first snapshot should succeed");
         assert_eq!(restored_zero, root_zero);
         assert_eq!(state.state_root(), root_zero);
-        assert_eq!(state.get_balance(&address).expect("balance read should succeed"), U256::from(50u64));
+        assert_eq!(
+            state
+                .get_balance(&address)
+                .expect("balance read should succeed"),
+            U256::from(50u64)
+        );
 
         let restored_one = state
             .load_snapshot(1)
             .expect("loading second snapshot should succeed");
         assert_eq!(restored_one, root_one);
         assert_eq!(state.state_root(), root_one);
-        assert_eq!(state.get_balance(&address).expect("balance read should succeed"), U256::from(75u64));
+        assert_eq!(
+            state
+                .get_balance(&address)
+                .expect("balance read should succeed"),
+            U256::from(75u64)
+        );
 
         cleanup(storage, path);
     }
@@ -1535,7 +1654,9 @@ mod tests {
                 .expect("snapshot creation should succeed");
         }
 
-        let pruned = state.prune_old_state().expect("snapshot pruning should succeed");
+        let pruned = state
+            .prune_old_state()
+            .expect("snapshot pruning should succeed");
         assert!(pruned > 0);
 
         assert!(storage
@@ -1583,7 +1704,10 @@ mod tests {
             .parallel_state_reads(&[first_key.clone(), b"missing".to_vec(), second_key.clone()])
             .expect("parallel reads should succeed");
 
-        assert_eq!(values, vec![Some(b"one".to_vec()), None, Some(b"two".to_vec())]);
+        assert_eq!(
+            values,
+            vec![Some(b"one".to_vec()), None, Some(b"two".to_vec())]
+        );
 
         cleanup(storage, path);
     }
@@ -1605,9 +1729,7 @@ mod tests {
             .expect("delete batch should succeed");
 
         assert_eq!(
-            storage
-                .state_get(key)
-                .expect("state read should succeed"),
+            storage.state_get(key).expect("state read should succeed"),
             Some(b"value".to_vec())
         );
         assert_eq!(
@@ -1632,7 +1754,10 @@ mod tests {
             .expect("conflict detection should succeed"));
 
         state
-            .write_batch(vec![StateBatchOp::Put(watched_key.clone(), b"value".to_vec())])
+            .write_batch(vec![StateBatchOp::Put(
+                watched_key.clone(),
+                b"value".to_vec(),
+            )])
             .expect("write batch should succeed");
         assert!(state
             .detect_conflicts(&snapshot, std::slice::from_ref(&watched_key))
@@ -1683,7 +1808,8 @@ mod tests {
         let second_hash = [25u8; 32];
         let first_node = VerkleNode::new_internal(0);
         let mut second_node = VerkleNode::new_internal(0);
-        second_node.set_child(2, VerkleNode::new_internal(1))
+        second_node
+            .set_child(2, VerkleNode::new_internal(1))
             .expect("set_child should succeed");
 
         state
@@ -1756,11 +1882,23 @@ mod tests {
 
         assert_eq!(root, state.state_root());
         assert_eq!(
-            state.get_balance(&from).expect("sender balance read should succeed"),
+            state
+                .get_balance(&from)
+                .expect("sender balance read should succeed"),
             U256::from(100_000u64) - U256::from(1_000u64) - gas_cost
         );
-        assert_eq!(state.get_nonce(&from).expect("sender nonce read should succeed"), 1);
-        assert_eq!(state.get_balance(&to).expect("recipient balance read should succeed"), U256::from(1_000u64));
+        assert_eq!(
+            state
+                .get_nonce(&from)
+                .expect("sender nonce read should succeed"),
+            1
+        );
+        assert_eq!(
+            state
+                .get_balance(&to)
+                .expect("recipient balance read should succeed"),
+            U256::from(1_000u64)
+        );
 
         cleanup(storage, path);
     }
@@ -1784,7 +1922,8 @@ mod tests {
             .expect("contract account update should succeed");
 
         let data = vec![1u8, 2, 3, 4];
-        let tx = Transaction::new_contract_call(from, contract, U256::from(500u64), 0, data.clone());
+        let tx =
+            Transaction::new_contract_call(from, contract, U256::from(500u64), 0, data.clone());
         let expected_storage_key = sha256(&data);
         let expected_storage_value = tx.hash();
 
@@ -1798,7 +1937,12 @@ mod tests {
                 .expect("storage read should succeed"),
             Some(expected_storage_value)
         );
-        assert_eq!(state.get_balance(&contract).expect("contract balance read should succeed"), U256::from(500u64));
+        assert_eq!(
+            state
+                .get_balance(&contract)
+                .expect("contract balance read should succeed"),
+            U256::from(500u64)
+        );
 
         cleanup(storage, path);
     }

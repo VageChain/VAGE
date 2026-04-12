@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
-use vage_types::{Address, Validator};
 use primitive_types::U256;
 use std::collections::HashMap;
+use vage_types::{Address, Validator};
 
 pub struct ValidatorSet {
     validators: HashMap<Address, Validator>,
@@ -80,7 +80,8 @@ impl ValidatorSet {
     }
 
     pub fn active_validators(&self) -> Vec<Validator> {
-        let mut active: Vec<Validator> = self.validators
+        let mut active: Vec<Validator> = self
+            .validators
             .values()
             .filter(|validator| validator.is_active())
             .cloned()
@@ -135,7 +136,11 @@ mod tests {
     fn validator(seed: u8, active: bool, stake_units: u64) -> Validator {
         let address = Address([seed; 32]);
         let pubkey = [seed; 32];
-        let mut validator = Validator::new(address, pubkey, U256::from(stake_units) * U256::from(10u64.pow(18)));
+        let mut validator = Validator::new(
+            address,
+            pubkey,
+            U256::from(stake_units) * U256::from(10u64.pow(18)),
+        );
         validator.status = if active {
             ValidatorStatus::Active
         } else {
@@ -156,10 +161,16 @@ mod tests {
             .expect("second validator should be accepted");
 
         assert_eq!(set.total_stake(), first.stake + second.stake);
-        assert_eq!(set.validator(&first.address).map(|validator| validator.address), Some(first.address));
+        assert_eq!(
+            set.validator(&first.address)
+                .map(|validator| validator.address),
+            Some(first.address)
+        );
         assert_eq!(set.voting_power(&second.address), second.voting_power);
 
-        let removed = set.remove_validator(&second.address).expect("validator should be removed");
+        let removed = set
+            .remove_validator(&second.address)
+            .expect("validator should be removed");
         assert_eq!(removed.address, second.address);
         assert_eq!(set.total_stake(), first.stake);
     }
@@ -171,9 +182,12 @@ mod tests {
         let second = validator(4, false, 1);
         let third = validator(5, true, 1);
 
-        set.add_validator(first.clone()).expect("first validator should be added");
-        set.add_validator(second).expect("second validator should be added");
-        set.add_validator(third.clone()).expect("third validator should be added");
+        set.add_validator(first.clone())
+            .expect("first validator should be added");
+        set.add_validator(second)
+            .expect("second validator should be added");
+        set.add_validator(third.clone())
+            .expect("third validator should be added");
 
         let active = set.active_validators();
         assert_eq!(active.len(), 2);
@@ -193,14 +207,20 @@ mod tests {
         assert_eq!(empty.get_proposer(0), None);
 
         let one = validator(6, true, 2);
-        empty.add_validator(one.clone()).expect("validator should be added");
+        empty
+            .add_validator(one.clone())
+            .expect("validator should be added");
         assert_eq!(empty.quorum_threshold(), 1);
         assert_eq!(empty.total_active_voting_power(), one.voting_power);
 
         let two = validator(7, true, 3);
         let three = validator(8, true, 4);
-        empty.add_validator(two.clone()).expect("validator should be added");
-        empty.add_validator(three.clone()).expect("validator should be added");
+        empty
+            .add_validator(two.clone())
+            .expect("validator should be added");
+        empty
+            .add_validator(three.clone())
+            .expect("validator should be added");
         assert_eq!(empty.quorum_threshold(), 3);
         assert_eq!(
             empty.total_active_voting_power(),

@@ -2,8 +2,8 @@ mod indexer;
 mod server;
 
 use anyhow::Result;
+use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::net::SocketAddr;
-use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 use tracing::info;
 
 #[tokio::main]

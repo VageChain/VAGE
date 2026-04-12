@@ -1,12 +1,12 @@
-use anyhow::{Result, bail};
+use crate::verifier::HeaderVerifier;
+use anyhow::{bail, Result};
+use libp2p::PeerId;
+use std::collections::VecDeque;
+use tracing::{error, info, warn};
 use vage_block::BlockBody;
 use vage_block::BlockHeader;
 use vage_types::Validator;
 use vage_types::{BlockHeight, Hash};
-use tracing::{info, warn, error};
-use crate::verifier::HeaderVerifier;
-use std::collections::VecDeque;
-use libp2p::PeerId;
 
 #[derive(Clone, Debug)]
 pub struct VerifiedHeaderEnvelope {
@@ -41,9 +41,10 @@ impl HeaderSync {
         trusted_header: BlockHeader,
         validator_set: Vec<Validator>,
     ) -> Self {
-        let zk_verification_key = HeaderVerifier::load_zk_verification_key().unwrap_or_else(|_| vec![0u8; 128]);
+        let zk_verification_key =
+            HeaderVerifier::load_zk_verification_key().unwrap_or_else(|_| vec![0u8; 128]);
         let current_height = trusted_header.height;
-        
+
         Self {
             peer,
             current_height,
@@ -57,23 +58,32 @@ impl HeaderSync {
     /// High-level entry point for initiating a sync to a peer's latest height.
     pub async fn sync_to_latest_peer_height(&mut self, peer_height: BlockHeight) -> Result<()> {
         if peer_height <= self.current_height {
-            info!("Local chain tip (height={}) is already up to date with peer {}.", self.current_height, self.peer);
+            info!(
+                "Local chain tip (height={}) is already up to date with peer {}.",
+                self.current_height, self.peer
+            );
             return Ok(());
         }
 
         let missing_count = peer_height - self.current_height;
-        info!("Detecting {} missing headers to sync from peer {}...", missing_count, self.peer);
+        info!(
+            "Detecting {} missing headers to sync from peer {}...",
+            missing_count, self.peer
+        );
 
         // Request the missing range of headers in chunks if necessary.
         // This payload would be sent via libp2p Request-Response protocol.
         let _request_payload = self.request_headers(self.current_height + 1, peer_height)?;
-        
+
         Ok(())
     }
 
     /// Construct a formal request for a range of block headers to be sent to a full node.
     pub fn request_headers(&self, start: BlockHeight, end: BlockHeight) -> Result<Vec<u8>> {
-        info!("Constructing header request for range [{}, {}] from peer {}...", start, end, self.peer);
+        info!(
+            "Constructing header request for range [{}, {}] from peer {}...",
+            start, end, self.peer
+        );
         // The serializable request format used by the VageChain P2P protocol.
         let request = (start, end);
         Ok(bincode::serialize(&request)?)
@@ -96,12 +106,16 @@ impl HeaderSync {
             return Ok(());
         }
 
-        info!("Received batch of {} headers from peer {}.", headers.len(), self.peer);
-        
+        info!(
+            "Received batch of {} headers from peer {}.",
+            headers.len(),
+            self.peer
+        );
+
         // Ensure the batch is sorted by height before processing.
         let mut sorted_headers = headers;
         sorted_headers.sort_by_key(|h| h.header.height);
-        
+
         self.process_verified_batch(sorted_headers)?;
         Ok(())
     }
@@ -110,11 +124,21 @@ impl HeaderSync {
         for envelope in batch {
             let header = envelope.header;
             if header.height != self.current_height + 1 {
-                warn!("Received out-of-order header: height={}, expected={}", header.height, self.current_height + 1);
-                bail!("Invalid header height sequence: expected {}, got {}", self.current_height + 1, header.height);
+                warn!(
+                    "Received out-of-order header: height={}, expected={}",
+                    header.height,
+                    self.current_height + 1
+                );
+                bail!(
+                    "Invalid header height sequence: expected {}, got {}",
+                    self.current_height + 1,
+                    header.height
+                );
             }
 
-            let parent = self.verified_headers.last().ok_or_else(|| anyhow::anyhow!("Internal error: missing parent for linkage verification"))?;
+            let parent = self.verified_headers.last().ok_or_else(|| {
+                anyhow::anyhow!("Internal error: missing parent for linkage verification")
+            })?;
             let proposer_pk = self
                 .validator_set
                 .iter()
@@ -130,7 +154,8 @@ impl HeaderSync {
             )?;
 
             if !self.validator_set.is_empty() {
-                let expected_validator_root = BlockBody::compute_validator_root(&self.validator_set);
+                let expected_validator_root =
+                    BlockBody::compute_validator_root(&self.validator_set);
                 if header.validator_root != expected_validator_root {
                     bail!("validator root mismatch at height {}", header.height);
                 }
@@ -146,7 +171,10 @@ impl HeaderSync {
             self.verified_headers.push(header);
         }
 
-        info!("Header sync progress: successfully verified up to height {}.", self.current_height);
+        info!(
+            "Header sync progress: successfully verified up to height {}.",
+            self.current_height
+        );
         Ok(())
     }
 
@@ -157,13 +185,23 @@ impl HeaderSync {
             for header in batch {
                 // 1. Verify height sequence (monotonicity and continuity)
                 if header.height != self.current_height + 1 {
-                    warn!("Received out-of-order header: height={}, expected={}", header.height, self.current_height + 1);
-                    bail!("Invalid header height sequence: expected {}, got {}", self.current_height + 1, header.height);
+                    warn!(
+                        "Received out-of-order header: height={}, expected={}",
+                        header.height,
+                        self.current_height + 1
+                    );
+                    bail!(
+                        "Invalid header height sequence: expected {}, got {}",
+                        self.current_height + 1,
+                        header.height
+                    );
                 }
 
-                // 2. Retrieve the parent to establish linkage. 
+                // 2. Retrieve the parent to establish linkage.
                 // Since verified_headers is initialized with a checkpoint, this is guaranteed to exist.
-                let parent = self.verified_headers.last().ok_or_else(|| anyhow::anyhow!("Internal error: missing parent for linkage verification"))?;
+                let parent = self.verified_headers.last().ok_or_else(|| {
+                    anyhow::anyhow!("Internal error: missing parent for linkage verification")
+                })?;
 
                 // 3. Perform exhaustive cryptographic and structural validation.
                 // This call includes parent hash linkage, timestamp monotonicity, and ZK-proof verification.
@@ -180,7 +218,10 @@ impl HeaderSync {
                     &proposer_pk,
                     &self.zk_verification_key,
                 ) {
-                    error!("Validation failed for block at height {}: {:?}", header.height, e);
+                    error!(
+                        "Validation failed for block at height {}: {:?}",
+                        header.height, e
+                    );
                     bail!("Light client header verification failed: {:?}", e);
                 }
 
@@ -189,8 +230,11 @@ impl HeaderSync {
                 self.verified_headers.push(header);
             }
         }
-        
-        info!("Header sync progress: successfully verified up to height {}.", self.current_height);
+
+        info!(
+            "Header sync progress: successfully verified up to height {}.",
+            self.current_height
+        );
         Ok(())
     }
 

@@ -1,20 +1,20 @@
+use anyhow::{bail, Context, Result};
 use lru::LruCache;
 use metrics::counter;
 use parking_lot::Mutex;
-use rayon::prelude::*;
-use redb::{Database, ReadTransaction, TableDefinition, WriteTransaction, ReadableTable};
 use primitive_types::U256;
-use vage_block::{BlockBody, BlockHeader};
-use vage_types::{Receipt, Transaction, Validator};
+use rayon::prelude::*;
+use redb::{Database, ReadTransaction, ReadableTable, TableDefinition, WriteTransaction};
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::{mpsc, Arc};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use tracing::{error, info, warn};
-use anyhow::{Result, bail, Context};
+use vage_block::{BlockBody, BlockHeader};
+use vage_types::{Receipt, Transaction, Validator};
 
 /// Metadata table for database versioning and health checks.
 pub const METADATA: TableDefinition<&str, &str> = TableDefinition::new("metadata");
@@ -85,7 +85,8 @@ impl StorageEngine {
         let tx = self.begin_write()?;
         crate::tables::validate_schema(&tx)?;
         crate::tables::create_tables(&tx)?;
-        tx.commit().context("Failed to commit schema table initialization")?;
+        tx.commit()
+            .context("Failed to commit schema table initialization")?;
         Ok(())
     }
 
@@ -155,7 +156,8 @@ impl StorageEngine {
                                         bail!(
                                             "Database was created with a newer version {} > {}. \
                                              Please upgrade the client.",
-                                            version_str, DB_VERSION
+                                            version_str,
+                                            DB_VERSION
                                         );
                                     } else if existing_version < expected_version {
                                         // Database from older version - needs migration
@@ -164,16 +166,28 @@ impl StorageEngine {
                                              Attempting automatic migration...",
                                             version_str, DB_VERSION
                                         );
-                                        Self::migrate_schema(existing_version, expected_version, &mut table)?
+                                        Self::migrate_schema(
+                                            existing_version,
+                                            expected_version,
+                                            &mut table,
+                                        )?
                                     }
                                 }
                                 Err(e) => {
-                                    bail!("Failed to parse expected database version {}: {}", DB_VERSION, e);
+                                    bail!(
+                                        "Failed to parse expected database version {}: {}",
+                                        DB_VERSION,
+                                        e
+                                    );
                                 }
                             }
                         }
                         Err(e) => {
-                            bail!("Failed to parse existing database version {}: {}", version_str, e);
+                            bail!(
+                                "Failed to parse existing database version {}: {}",
+                                version_str,
+                                e
+                            );
                         }
                     }
                 }
@@ -215,11 +229,14 @@ impl StorageEngine {
         if parts.len() != 3 {
             bail!("Invalid version format: {}", version);
         }
-        let major = parts[0].parse::<u32>()
+        let major = parts[0]
+            .parse::<u32>()
             .context("Failed to parse major version")?;
-        let minor = parts[1].parse::<u32>()
+        let minor = parts[1]
+            .parse::<u32>()
             .context("Failed to parse minor version")?;
-        let patch = parts[2].parse::<u32>()
+        let patch = parts[2]
+            .parse::<u32>()
             .context("Failed to parse patch version")?;
         Ok((major, minor, patch))
     }
@@ -235,8 +252,10 @@ impl StorageEngine {
         to: (u32, u32, u32),
         metadata_table: &mut redb::Table<&str, &str>,
     ) -> Result<()> {
-        info!("Migrating database schema from {}.{}.{} to {}.{}.{}",
-              from.0, from.1, from.2, to.0, to.1, to.2);
+        info!(
+            "Migrating database schema from {}.{}.{} to {}.{}.{}",
+            from.0, from.1, from.2, to.0, to.1, to.2
+        );
 
         // Ã¢â€â‚¬Ã¢â€â‚¬ 1.0.0 Ã¢â€ â€™ 1.1.0 Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         // Added: `chain_id` column in the metadata table for replay-protection.
@@ -264,7 +283,10 @@ impl StorageEngine {
         let version_string = format!("{}.{}.{}", to.0, to.1, to.2);
         metadata_table.insert("version", version_string.as_str())?;
         metadata_table.insert("migrated_at", chrono::Utc::now().to_rfc3339().as_str())?;
-        info!("Database migration to {} completed successfully", version_string);
+        info!(
+            "Database migration to {} completed successfully",
+            version_string
+        );
 
         Ok(())
     }
@@ -306,7 +328,11 @@ impl StorageEngine {
     }
 
     pub fn flush_buffered_block_execution_writes(&self) -> Result<usize> {
-        Self::flush_buffered_state_writes_inner(&self.db, &self.buffered_state_writes, &self.metrics)
+        Self::flush_buffered_state_writes_inner(
+            &self.db,
+            &self.buffered_state_writes,
+            &self.metrics,
+        )
     }
 
     /// Retrieve a value from a specific table within a read transaction.
@@ -318,15 +344,15 @@ impl StorageEngine {
     }
 
     pub fn store_block_header(&self, height: u64, header: &BlockHeader) -> Result<()> {
-        let header_bytes = bincode::serialize(header).context("Failed to serialize block header")?;
+        let header_bytes =
+            bincode::serialize(header).context("Failed to serialize block header")?;
         self.store_block_header_bytes(height, &header_bytes)
     }
 
     pub fn get_block_header(&self, height: u64) -> Result<Option<BlockHeader>> {
         self.get_block_header_bytes(height)?
             .map(|header_bytes| {
-                bincode::deserialize(&header_bytes)
-                    .context("Failed to deserialize block header")
+                bincode::deserialize(&header_bytes).context("Failed to deserialize block header")
             })
             .transpose()
     }
@@ -339,8 +365,7 @@ impl StorageEngine {
     pub fn get_block_body(&self, height: u64) -> Result<Option<BlockBody>> {
         self.get_block_body_bytes(height)?
             .map(|body_bytes| {
-                bincode::deserialize(&body_bytes)
-                    .context("Failed to deserialize block body")
+                bincode::deserialize(&body_bytes).context("Failed to deserialize block body")
             })
             .transpose()
     }
@@ -351,7 +376,8 @@ impl StorageEngine {
         header: &BlockHeader,
         body: &BlockBody,
     ) -> Result<()> {
-        let header_bytes = bincode::serialize(header).context("Failed to serialize block header")?;
+        let header_bytes =
+            bincode::serialize(header).context("Failed to serialize block header")?;
         let body_bytes = bincode::serialize(body).context("Failed to serialize block body")?;
         self.atomic_block_commit(height, header_bytes, body_bytes)
     }
@@ -473,8 +499,7 @@ impl StorageEngine {
     pub fn get_transaction(&self, tx_hash: [u8; 32]) -> Result<Option<Transaction>> {
         self.get_transaction_bytes(tx_hash)?
             .map(|tx_bytes| {
-                bincode::deserialize(&tx_bytes)
-                    .context("Failed to deserialize transaction")
+                bincode::deserialize(&tx_bytes).context("Failed to deserialize transaction")
             })
             .transpose()
     }
@@ -523,8 +548,7 @@ impl StorageEngine {
     pub fn get_receipt(&self, tx_hash: [u8; 32]) -> Result<Option<Receipt>> {
         self.get_receipt_bytes(tx_hash)?
             .map(|receipt_bytes| {
-                bincode::deserialize(&receipt_bytes)
-                    .context("Failed to deserialize receipt")
+                bincode::deserialize(&receipt_bytes).context("Failed to deserialize receipt")
             })
             .transpose()
     }
@@ -623,7 +647,9 @@ impl StorageEngine {
         {
             let mut table = tx.open_table(crate::schema::TABLE_STATE)?;
             for (key, value) in changes {
-                let previous = table.get(key.as_slice())?.map(|entry| entry.value().to_vec());
+                let previous = table
+                    .get(key.as_slice())?
+                    .map(|entry| entry.value().to_vec());
                 rollback_changes.push((key.clone(), previous));
 
                 if let Some(v) = value {
@@ -643,7 +669,11 @@ impl StorageEngine {
         let tx = self.begin_read()?;
         let table = tx.open_table(crate::schema::TABLE_STATE)?;
         keys.iter()
-            .map(|key| Ok(table.get(key.as_slice())?.map(|value| value.value().to_vec())))
+            .map(|key| {
+                Ok(table
+                    .get(key.as_slice())?
+                    .map(|value| value.value().to_vec()))
+            })
             .collect()
     }
 
@@ -681,7 +711,7 @@ impl StorageEngine {
                 results.push((k.value().to_vec(), v.value().to_vec()));
             }
         }
-        
+
         Ok(results)
     }
 
@@ -745,7 +775,8 @@ impl StorageEngine {
     // --- Validator & Staking Storage Methods ---
 
     pub fn store_validator(&self, address: [u8; 32], validator: &Validator) -> Result<()> {
-        let validator_bytes = bincode::serialize(validator).context("Failed to serialize validator")?;
+        let validator_bytes =
+            bincode::serialize(validator).context("Failed to serialize validator")?;
         self.store_validator_bytes(address, &validator_bytes)
     }
 
@@ -763,8 +794,7 @@ impl StorageEngine {
     pub fn get_validator(&self, address: [u8; 32]) -> Result<Option<Validator>> {
         self.get_validator_bytes(address)?
             .map(|validator_bytes| {
-                bincode::deserialize(&validator_bytes)
-                    .context("Failed to deserialize validator")
+                bincode::deserialize(&validator_bytes).context("Failed to deserialize validator")
             })
             .transpose()
     }
@@ -777,7 +807,8 @@ impl StorageEngine {
     }
 
     pub fn store_validator_set(&self, height: u64, validators: &[Validator]) -> Result<()> {
-        let set_bytes = bincode::serialize(validators).context("Failed to serialize validator set")?;
+        let set_bytes =
+            bincode::serialize(validators).context("Failed to serialize validator set")?;
         self.store_validator_set_bytes(height, &set_bytes)
     }
 
@@ -795,8 +826,7 @@ impl StorageEngine {
     pub fn load_validator_set(&self, height: u64) -> Result<Option<Vec<Validator>>> {
         self.load_validator_set_bytes(height)?
             .map(|set_bytes| {
-                bincode::deserialize(&set_bytes)
-                    .context("Failed to deserialize validator set")
+                bincode::deserialize(&set_bytes).context("Failed to deserialize validator set")
             })
             .transpose()
     }
@@ -815,7 +845,11 @@ impl StorageEngine {
     }
 
     /// Store the current staking balance for an address.
-    pub fn store_staking_balance_bytes(&self, address: [u8; 32], balance_bytes: &[u8]) -> Result<()> {
+    pub fn store_staking_balance_bytes(
+        &self,
+        address: [u8; 32],
+        balance_bytes: &[u8],
+    ) -> Result<()> {
         let tx = self.begin_write()?;
         {
             let mut table = tx.open_table(crate::schema::TABLE_STAKING)?;
@@ -926,7 +960,8 @@ impl StorageEngine {
                 table.remove(*hash)?;
             }
         }
-        tx.commit().context("Failed to evict low-priority mempool transactions")?;
+        tx.commit()
+            .context("Failed to evict low-priority mempool transactions")?;
         Ok(hashes_to_remove)
     }
 
@@ -1048,7 +1083,9 @@ impl StorageEngine {
     pub fn flush_to_disk(&self) -> Result<()> {
         info!("Synching storage cache to persistent disk storage...");
         let _ = self.flush_buffered_block_execution_writes()?;
-        self.metrics.disk_flush_total.fetch_add(1, Ordering::Relaxed);
+        self.metrics
+            .disk_flush_total
+            .fetch_add(1, Ordering::Relaxed);
         // redb's TwoPhase strategy means commit is flush.
         counter!("storage.disk_flush_total").increment(1);
         Ok(())
@@ -1087,18 +1124,16 @@ impl StorageEngine {
     ) -> Result<()> {
         let snapshot_path = snapshot_path.as_ref();
         let target_path = target_path.as_ref();
-        info!(
-            "Restoring database from snapshot {:?}...",
-            snapshot_path
-        );
+        info!("Restoring database from snapshot {:?}...", snapshot_path);
 
         if !snapshot_path.exists() {
             bail!("snapshot file does not exist: {:?}", snapshot_path);
         }
 
         if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create restore target directory {:?}", parent))?;
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create restore target directory {:?}", parent)
+            })?;
         }
 
         let backup_path = target_path.with_extension("bak");
@@ -1106,13 +1141,17 @@ impl StorageEngine {
             if backup_path.exists() {
                 let _ = fs::remove_file(&backup_path);
             }
-            fs::rename(target_path, &backup_path)
-                .with_context(|| format!("Failed to back up existing database {:?}", target_path))?;
+            fs::rename(target_path, &backup_path).with_context(|| {
+                format!("Failed to back up existing database {:?}", target_path)
+            })?;
         }
 
-        if let Err(error) = fs::copy(snapshot_path, target_path)
-            .with_context(|| format!("Failed to copy snapshot {:?} to {:?}", snapshot_path, target_path))
-        {
+        if let Err(error) = fs::copy(snapshot_path, target_path).with_context(|| {
+            format!(
+                "Failed to copy snapshot {:?} to {:?}",
+                snapshot_path, target_path
+            )
+        }) {
             if backup_path.exists() {
                 let _ = fs::rename(&backup_path, target_path);
             }
@@ -1192,7 +1231,10 @@ impl StorageEngine {
             let compaction_result = Self::copy_database_to_path(db.clone(), &compacted_path);
 
             if let Err(compaction_error) = compaction_result {
-                error!("background compaction failed for {:?}: {:?}", db_path, compaction_error);
+                error!(
+                    "background compaction failed for {:?}: {:?}",
+                    db_path, compaction_error
+                );
             } else {
                 let timestamp = chrono::Utc::now().to_rfc3339();
                 if let Ok(tx) = db.begin_write() {
@@ -1229,13 +1271,19 @@ impl StorageEngine {
     /// Rollback the state to a previous configuration by applying an explicit undo batch/log.
     /// This relies on the execution/state layer tracking prior values during state transitions,
     /// and submitting the inverse diffs back to the storage engine when a reorganization occurs.
-    pub fn rollback_state_batch(&self, undo_changes: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> Result<()> {
-        info!("Executing atomic state rollback of {} records...", undo_changes.len());
+    pub fn rollback_state_batch(
+        &self,
+        undo_changes: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+    ) -> Result<()> {
+        info!(
+            "Executing atomic state rollback of {} records...",
+            undo_changes.len()
+        );
         self.atomic_state_commit(undo_changes)?;
-        
+
         // Clear hot state cache after rollback to prevent phantom reads
         self.cache.lock().clear();
-        
+
         Ok(())
     }
 
@@ -1277,7 +1325,10 @@ impl StorageEngine {
 
         let bytes = value.value();
         if bytes.len() != std::mem::size_of::<u64>() {
-            bail!("invalid latest_block_height metadata length: {}", bytes.len());
+            bail!(
+                "invalid latest_block_height metadata length: {}",
+                bytes.len()
+            );
         }
 
         let mut height_bytes = [0u8; 8];
@@ -1293,7 +1344,8 @@ impl StorageEngine {
                 .context("Failed to open metadata table for shutdown bookkeeping")?;
             table.insert(LAST_SHUTDOWN_CLEAN_KEY, "true")?;
         }
-        tx.commit().context("Failed to record clean database shutdown")?;
+        tx.commit()
+            .context("Failed to record clean database shutdown")?;
         Ok(())
     }
 
@@ -1330,16 +1382,18 @@ impl StorageEngine {
         let db = self.db.clone();
         let buffered_state_writes = Arc::clone(&self.buffered_state_writes);
         let metrics = Arc::clone(&self.metrics);
-        let handle = thread::spawn(move || {
-            loop {
-                match stop_rx.recv_timeout(Duration::from_secs(DEFAULT_FLUSH_INTERVAL_SECS)) {
-                    Ok(_) => break,
-                    Err(mpsc::RecvTimeoutError::Timeout) => {
-                        let _ = Self::flush_buffered_state_writes_inner(&db, &buffered_state_writes, &metrics);
-                        metrics.disk_flush_total.fetch_add(1, Ordering::Relaxed);
-                    }
-                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        let handle = thread::spawn(move || loop {
+            match stop_rx.recv_timeout(Duration::from_secs(DEFAULT_FLUSH_INTERVAL_SECS)) {
+                Ok(_) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    let _ = Self::flush_buffered_state_writes_inner(
+                        &db,
+                        &buffered_state_writes,
+                        &metrics,
+                    );
+                    metrics.disk_flush_total.fetch_add(1, Ordering::Relaxed);
                 }
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
         });
 
@@ -1375,7 +1429,9 @@ impl StorageEngine {
             std::mem::take(&mut *guard)
         };
 
-        let tx = db.begin_write().context("Failed to begin write transaction for buffered state flush")?;
+        let tx = db
+            .begin_write()
+            .context("Failed to begin write transaction for buffered state flush")?;
         {
             let mut table = tx.open_table(crate::schema::TABLE_STATE)?;
             for (key, value) in &pending {
@@ -1386,8 +1442,11 @@ impl StorageEngine {
                 }
             }
         }
-        tx.commit().context("Failed to commit buffered state writes")?;
-        metrics.buffered_write_flushes.fetch_add(1, Ordering::Relaxed);
+        tx.commit()
+            .context("Failed to commit buffered state writes")?;
+        metrics
+            .buffered_write_flushes
+            .fetch_add(1, Ordering::Relaxed);
         Ok(pending.len())
     }
 
@@ -1403,7 +1462,9 @@ impl StorageEngine {
         }
 
         let snapshot_db = crate::schema::Schema::init(dest)?;
-        let read_tx = db.begin_read().context("Failed to begin read transaction for snapshot")?;
+        let read_tx = db
+            .begin_read()
+            .context("Failed to begin read transaction for snapshot")?;
         let write_tx = snapshot_db
             .begin_write()
             .context("Failed to begin write transaction for snapshot")?;
@@ -1424,7 +1485,9 @@ impl StorageEngine {
         Self::copy_u64_bytes_table(&read_tx, &write_tx, crate::schema::TABLE_VALIDATOR_SETS)?;
         Self::copy_hash_bytes_table(&read_tx, &write_tx, crate::schema::TABLE_SLASHING_RECORDS)?;
 
-        write_tx.commit().context("Failed to commit snapshot database")?;
+        write_tx
+            .commit()
+            .context("Failed to commit snapshot database")?;
         Ok(())
     }
 
@@ -1498,7 +1561,10 @@ impl StorageEngine {
         Ok(())
     }
 
-    fn verify_str_bytes_table(read_tx: &ReadTransaction, table_def: TableDefinition<&str, &[u8]>) -> Result<()> {
+    fn verify_str_bytes_table(
+        read_tx: &ReadTransaction,
+        table_def: TableDefinition<&str, &[u8]>,
+    ) -> Result<()> {
         let table = read_tx.open_table(table_def)?;
         for row in table.iter()? {
             let _ = row?;
@@ -1506,7 +1572,10 @@ impl StorageEngine {
         Ok(())
     }
 
-    fn verify_u64_bytes_table(read_tx: &ReadTransaction, table_def: TableDefinition<u64, &[u8]>) -> Result<()> {
+    fn verify_u64_bytes_table(
+        read_tx: &ReadTransaction,
+        table_def: TableDefinition<u64, &[u8]>,
+    ) -> Result<()> {
         let table = read_tx.open_table(table_def)?;
         for row in table.iter()? {
             let _ = row?;
@@ -1514,7 +1583,10 @@ impl StorageEngine {
         Ok(())
     }
 
-    fn verify_hash_bytes_table(read_tx: &ReadTransaction, table_def: TableDefinition<[u8; 32], &[u8]>) -> Result<()> {
+    fn verify_hash_bytes_table(
+        read_tx: &ReadTransaction,
+        table_def: TableDefinition<[u8; 32], &[u8]>,
+    ) -> Result<()> {
         let table = read_tx.open_table(table_def)?;
         for row in table.iter()? {
             let _ = row?;
@@ -1522,7 +1594,10 @@ impl StorageEngine {
         Ok(())
     }
 
-    fn verify_slice_bytes_table(read_tx: &ReadTransaction, table_def: TableDefinition<&[u8], &[u8]>) -> Result<()> {
+    fn verify_slice_bytes_table(
+        read_tx: &ReadTransaction,
+        table_def: TableDefinition<&[u8], &[u8]>,
+    ) -> Result<()> {
         let table = read_tx.open_table(table_def)?;
         for row in table.iter()? {
             let _ = row?;
@@ -1530,7 +1605,10 @@ impl StorageEngine {
         Ok(())
     }
 
-    fn verify_hash_u64_table(read_tx: &ReadTransaction, table_def: TableDefinition<[u8; 32], u64>) -> Result<()> {
+    fn verify_hash_u64_table(
+        read_tx: &ReadTransaction,
+        table_def: TableDefinition<[u8; 32], u64>,
+    ) -> Result<()> {
         let table = read_tx.open_table(table_def)?;
         for row in table.iter()? {
             let _ = row?;
@@ -1549,12 +1627,12 @@ impl Drop for StorageEngine {
 #[cfg(test)]
 mod tests {
     use super::StorageEngine;
-    use vage_block::{BlockBody, BlockHeader};
     use primitive_types::U256;
-    use vage_types::{Address, Receipt, Transaction, Validator};
-    use vage_types::validator::ValidatorStatus;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use vage_block::{BlockBody, BlockHeader};
+    use vage_types::validator::ValidatorStatus;
+    use vage_types::{Address, Receipt, Transaction, Validator};
 
     fn temp_db_path(name: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -1590,8 +1668,15 @@ mod tests {
 
         assert_eq!(loaded_header, header);
         assert_eq!(loaded_body, body);
-        assert!(engine.block_exists(7).expect("existence check should succeed"));
-        assert_eq!(engine.latest_block_height().expect("latest height should load"), 7);
+        assert!(engine
+            .block_exists(7)
+            .expect("existence check should succeed"));
+        assert_eq!(
+            engine
+                .latest_block_height()
+                .expect("latest height should load"),
+            7
+        );
 
         drop(engine);
         let _ = std::fs::remove_file(db_path);
@@ -1610,19 +1695,39 @@ mod tests {
                 .expect("atomic block commit should succeed");
         }
 
-        assert_eq!(engine.latest_block_height().expect("latest height should load"), 3);
-        assert!(engine.block_exists(1).expect("block 1 check should succeed"));
-        assert!(engine.block_exists(3).expect("block 3 check should succeed"));
+        assert_eq!(
+            engine
+                .latest_block_height()
+                .expect("latest height should load"),
+            3
+        );
+        assert!(engine
+            .block_exists(1)
+            .expect("block 1 check should succeed"));
+        assert!(engine
+            .block_exists(3)
+            .expect("block 3 check should succeed"));
 
         let pruned = engine
             .prune_blocks_before(3)
             .expect("block pruning should succeed");
 
         assert_eq!(pruned, 2);
-        assert!(!engine.block_exists(1).expect("block 1 check should succeed"));
-        assert!(!engine.block_exists(2).expect("block 2 check should succeed"));
-        assert!(engine.block_exists(3).expect("block 3 check should succeed"));
-        assert_eq!(engine.latest_block_height().expect("latest height should load"), 3);
+        assert!(!engine
+            .block_exists(1)
+            .expect("block 1 check should succeed"));
+        assert!(!engine
+            .block_exists(2)
+            .expect("block 2 check should succeed"));
+        assert!(engine
+            .block_exists(3)
+            .expect("block 3 check should succeed"));
+        assert_eq!(
+            engine
+                .latest_block_height()
+                .expect("latest height should load"),
+            3
+        );
 
         drop(engine);
         let _ = std::fs::remove_file(db_path);
@@ -1633,12 +1738,8 @@ mod tests {
         let db_path = temp_db_path("tx-storage");
         let engine = StorageEngine::new(&db_path).expect("storage should initialize");
 
-        let tx = Transaction::new_transfer(
-            Address([1u8; 32]),
-            Address([2u8; 32]),
-            U256::from(25u64),
-            3,
-        );
+        let tx =
+            Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(25u64), 3);
         let tx_hash = tx.hash();
         let receipt = Receipt::new_success(tx_hash, 21_000, Some([9u8; 32]));
 
@@ -1674,18 +1775,10 @@ mod tests {
         let db_path = temp_db_path("tx-batch-index");
         let engine = StorageEngine::new(&db_path).expect("storage should initialize");
 
-        let tx_one = Transaction::new_transfer(
-            Address([3u8; 32]),
-            Address([4u8; 32]),
-            U256::from(10u64),
-            1,
-        );
-        let tx_two = Transaction::new_transfer(
-            Address([5u8; 32]),
-            Address([6u8; 32]),
-            U256::from(20u64),
-            2,
-        );
+        let tx_one =
+            Transaction::new_transfer(Address([3u8; 32]), Address([4u8; 32]), U256::from(10u64), 1);
+        let tx_two =
+            Transaction::new_transfer(Address([5u8; 32]), Address([6u8; 32]), U256::from(20u64), 2);
 
         engine
             .store_block_transactions_typed(11, &[tx_one.clone(), tx_two.clone()])
@@ -1731,7 +1824,10 @@ mod tests {
 
         let rollback = engine
             .atomic_state_commit_with_rollback(vec![
-                (b"account:alice".to_vec(), Some(br#"{"balance":25}"#.to_vec())),
+                (
+                    b"account:alice".to_vec(),
+                    Some(br#"{"balance":25}"#.to_vec()),
+                ),
                 (b"storage:slot1".to_vec(), Some(vec![1u8, 2, 3])),
             ])
             .expect("atomic state commit should succeed");
@@ -1873,28 +1969,55 @@ mod tests {
         high.gas_price = U256::from(9u64);
 
         engine
-            .mempool_insert(low.hash(), &bincode::serialize(&low).expect("low tx should encode"))
+            .mempool_insert(
+                low.hash(),
+                &bincode::serialize(&low).expect("low tx should encode"),
+            )
             .expect("low priority tx should persist");
         engine
-            .mempool_insert(medium.hash(), &bincode::serialize(&medium).expect("medium tx should encode"))
+            .mempool_insert(
+                medium.hash(),
+                &bincode::serialize(&medium).expect("medium tx should encode"),
+            )
             .expect("medium priority tx should persist");
         engine
-            .mempool_insert(high.hash(), &bincode::serialize(&high).expect("high tx should encode"))
+            .mempool_insert(
+                high.hash(),
+                &bincode::serialize(&high).expect("high tx should encode"),
+            )
             .expect("high priority tx should persist");
 
-        assert!(engine.mempool_contains(low.hash()).expect("contains should succeed"));
-        assert_eq!(engine.mempool_iterate_typed().expect("iterate should succeed").len(), 3);
+        assert!(engine
+            .mempool_contains(low.hash())
+            .expect("contains should succeed"));
+        assert_eq!(
+            engine
+                .mempool_iterate_typed()
+                .expect("iterate should succeed")
+                .len(),
+            3
+        );
 
         let removed = engine
             .mempool_evict_lowest_priority(2)
             .expect("eviction should succeed");
         assert_eq!(removed, vec![low.hash()]);
-        assert!(!engine.mempool_contains(low.hash()).expect("contains should succeed"));
-        assert!(engine.mempool_contains(medium.hash()).expect("contains should succeed"));
-        assert!(engine.mempool_contains(high.hash()).expect("contains should succeed"));
+        assert!(!engine
+            .mempool_contains(low.hash())
+            .expect("contains should succeed"));
+        assert!(engine
+            .mempool_contains(medium.hash())
+            .expect("contains should succeed"));
+        assert!(engine
+            .mempool_contains(high.hash())
+            .expect("contains should succeed"));
 
-        assert!(engine.mempool_remove(medium.hash()).expect("remove should succeed"));
-        let remaining = engine.mempool_iterate_typed().expect("iterate should succeed");
+        assert!(engine
+            .mempool_remove(medium.hash())
+            .expect("remove should succeed"));
+        let remaining = engine
+            .mempool_iterate_typed()
+            .expect("iterate should succeed");
         assert_eq!(remaining, vec![(high.hash(), high.clone())]);
 
         drop(engine);

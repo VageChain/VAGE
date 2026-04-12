@@ -1,7 +1,7 @@
-use crate::{AccountCommands, utils};
+use crate::{utils, AccountCommands};
 use anyhow::Result;
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 pub async fn handle_account_command(action: AccountCommands) -> Result<()> {
     match action {
@@ -64,12 +64,12 @@ async fn derive_address_from_key(private_key: &str) -> Result<()> {
     // For Ed25519, we need to derive the public key first
     // Parse the private key bytes
     let seed = utils::parse_hex32(private_key)?;
-    
+
     // Use ed25519-dalek to get public key
     let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
     let verifying_key = signing_key.verifying_key();
     let pubkey_hex = format!("0x{}", hex::encode(verifying_key.as_bytes()));
-    
+
     let address = utils::derive_address(&pubkey_hex)?;
 
     println!("📖 Address Derivation");
@@ -107,11 +107,11 @@ async fn list_devnet_accounts() -> Result<()> {
 
 async fn import_account(private_key: &str, output: Option<PathBuf>) -> Result<()> {
     let seed = utils::parse_hex32(private_key)?;
-    
+
     let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
     let verifying_key = signing_key.verifying_key();
     let pubkey_hex = format!("0x{}", hex::encode(verifying_key.as_bytes()));
-    
+
     let address = utils::derive_address(&pubkey_hex)?;
 
     println!("📥 Imported Account");

@@ -1,9 +1,9 @@
 use crate::node::VerkleNode;
 use crate::verkle_tree::VerkleTree;
 use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
 use vage_crypto::hash::domain_hash;
 use vage_types::{Account, Address};
-use serde::{Deserialize, Serialize};
 
 const DOMAIN_VERKLE_PROOF: &str = "VAGE_VERKLE_PROOF";
 
@@ -290,10 +290,14 @@ mod tests {
         let value = hash(2);
         tree.insert(key, value).expect("tree insert should succeed");
 
-        let proof = VerkleProof::generate_proof(&tree, key).expect("proof generation should succeed");
+        let proof =
+            VerkleProof::generate_proof(&tree, key).expect("proof generation should succeed");
 
         assert_eq!(proof.path, tree.path_indices(key));
-        assert_eq!(proof.commitments.first().copied(), Some(tree.root_commitment()));
+        assert_eq!(
+            proof.commitments.first().copied(),
+            Some(tree.root_commitment())
+        );
         assert_eq!(proof.values.last().copied(), Some(value));
         assert!(proof
             .verify_proof(key, value, tree.root_commitment())
@@ -327,7 +331,12 @@ mod tests {
         let storage_proof = VerkleProof::generate_storage_proof(&tree, &address, storage_slot)
             .expect("storage proof generation should succeed");
         assert!(storage_proof
-            .verify_storage_proof(&address, storage_slot, storage_value, tree.root_commitment())
+            .verify_storage_proof(
+                &address,
+                storage_slot,
+                storage_value,
+                tree.root_commitment()
+            )
             .expect("storage proof verification should succeed"));
     }
 

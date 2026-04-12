@@ -11,24 +11,21 @@
 ///  8  `collect_receipts` â€” assemble `Receipt` objects from outcomes
 ///  9  `metrics` â€” record execution latency, conflict rate, retry count
 /// 10  `pipeline_tests` â€” unit tests for the full pipeline
-
 use crate::parallel::commit::{CommitManager, CommitManagerConfig, CommitSummary};
 use crate::parallel::dependency::ReadWriteSet;
 use crate::parallel::mv_memory::{MVMemory, MVMemoryConfig, SnapshotId, TxVersion};
-use crate::parallel::scheduler::{
-    BlockScheduler, BlockSchedulerConfig, ExecutionTask,
-};
+use crate::parallel::scheduler::{BlockScheduler, BlockSchedulerConfig, ExecutionTask};
 use anyhow::{anyhow, Result};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use vage_state::StateDb;
-use vage_types::Receipt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
+use vage_state::StateDb;
+use vage_types::Receipt;
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Configuration
@@ -278,7 +275,9 @@ pub struct StateKeyPrefetcher {
 
 impl StateKeyPrefetcher {
     pub fn new() -> Self {
-        Self { prefetch_queue: Vec::new() }
+        Self {
+            prefetch_queue: Vec::new(),
+        }
     }
 
     /// Extract likely-accessed keys from task metadata for a batch.
@@ -379,7 +378,11 @@ impl HotAccountCache {
     pub fn hit_rate(&self) -> f64 {
         let h = self.hits.load(Ordering::Relaxed) as f64;
         let m = self.misses.load(Ordering::Relaxed) as f64;
-        if h + m == 0.0 { 0.0 } else { h / (h + m) }
+        if h + m == 0.0 {
+            0.0
+        } else {
+            h / (h + m)
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -405,7 +408,10 @@ pub struct WriteBatch {
 
 impl WriteBatch {
     pub fn new(capacity: usize) -> Self {
-        Self { entries: Vec::with_capacity(capacity), capacity }
+        Self {
+            entries: Vec::with_capacity(capacity),
+            capacity,
+        }
     }
 
     /// Stage a key-value pair for the next flush.
@@ -460,7 +466,11 @@ pub struct ExecutionContext {
 
 impl ExecutionContext {
     pub fn new() -> Self {
-        Self { reads: Vec::new(), writes: Vec::new(), logs: Vec::new() }
+        Self {
+            reads: Vec::new(),
+            writes: Vec::new(),
+            logs: Vec::new(),
+        }
     }
 
     /// Reset all buffers for reuse without releasing heap memory.
@@ -472,7 +482,9 @@ impl ExecutionContext {
 }
 
 impl Default for ExecutionContext {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Pool of pre-allocated execution contexts.
@@ -487,7 +499,9 @@ pub struct ExecutionContextPool {
 impl ExecutionContextPool {
     pub fn new(capacity: usize) -> Self {
         let pool = (0..capacity).map(|_| ExecutionContext::new()).collect();
-        Self { pool: Mutex::new(pool) }
+        Self {
+            pool: Mutex::new(pool),
+        }
     }
 
     /// Take a context from the pool (or allocate a fresh one).
@@ -560,8 +574,10 @@ impl ExecutionMetrics {
     // â”€â”€ KPI 1: throughput â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     pub fn record_committed(&self, parallel: usize, serial: usize) {
-        self.parallel_committed.fetch_add(parallel as u64, Ordering::Relaxed);
-        self.serial_committed.fetch_add(serial as u64, Ordering::Relaxed);
+        self.parallel_committed
+            .fetch_add(parallel as u64, Ordering::Relaxed);
+        self.serial_committed
+            .fetch_add(serial as u64, Ordering::Relaxed);
         self.blocks_processed.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -569,13 +585,18 @@ impl ExecutionMetrics {
     pub fn parallel_throughput(&self) -> f64 {
         let blocks = self.blocks_processed.load(Ordering::Relaxed);
         let committed = self.parallel_committed.load(Ordering::Relaxed);
-        if blocks == 0 { 0.0 } else { committed as f64 / blocks as f64 }
+        if blocks == 0 {
+            0.0
+        } else {
+            committed as f64 / blocks as f64
+        }
     }
 
     // â”€â”€ KPI 2: abort rate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     pub fn record_submissions(&self, count: usize) {
-        self.tx_submissions.fetch_add(count as u64, Ordering::Relaxed);
+        self.tx_submissions
+            .fetch_add(count as u64, Ordering::Relaxed);
     }
 
     pub fn record_aborts(&self, count: usize) {
@@ -586,13 +607,18 @@ impl ExecutionMetrics {
     pub fn abort_rate(&self) -> f64 {
         let s = self.tx_submissions.load(Ordering::Relaxed);
         let a = self.tx_aborts.load(Ordering::Relaxed);
-        if s == 0 { 0.0 } else { a as f64 / s as f64 }
+        if s == 0 {
+            0.0
+        } else {
+            a as f64 / s as f64
+        }
     }
 
     // â”€â”€ KPI 3: conflict frequency â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     pub fn record_conflicts(&self, count: usize) {
-        self.conflict_events.fetch_add(count as u64, Ordering::Relaxed);
+        self.conflict_events
+            .fetch_add(count as u64, Ordering::Relaxed);
         self.occ_rounds.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -600,7 +626,11 @@ impl ExecutionMetrics {
     pub fn conflicts_per_round(&self) -> f64 {
         let rounds = self.occ_rounds.load(Ordering::Relaxed);
         let events = self.conflict_events.load(Ordering::Relaxed);
-        if rounds == 0 { 0.0 } else { events as f64 / rounds as f64 }
+        if rounds == 0 {
+            0.0
+        } else {
+            events as f64 / rounds as f64
+        }
     }
 
     // â”€â”€ KPI 4: execution latency â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -615,7 +645,11 @@ impl ExecutionMetrics {
     pub fn mean_latency_ms(&self) -> f64 {
         let samples = self.latency_samples.load(Ordering::Relaxed);
         let total_ns = self.total_latency_ns.load(Ordering::Relaxed);
-        if samples == 0 { 0.0 } else { (total_ns as f64 / samples as f64) / 1_000_000.0 }
+        if samples == 0 {
+            0.0
+        } else {
+            (total_ns as f64 / samples as f64) / 1_000_000.0
+        }
     }
 
     // â”€â”€ KPI 5: CPU utilization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -626,7 +660,8 @@ impl ExecutionMetrics {
     /// `wall_ns`     â€” wall-clock ns of the batch window
     /// `num_threads` â€” number of worker threads
     pub fn record_cpu(&self, active_ns: u64, wall_ns: u64, num_threads: u64) {
-        self.active_thread_ns.fetch_add(active_ns * num_threads, Ordering::Relaxed);
+        self.active_thread_ns
+            .fetch_add(active_ns * num_threads, Ordering::Relaxed);
         self.total_thread_capacity_ns
             .fetch_add(wall_ns * num_threads, Ordering::Relaxed);
     }
@@ -637,7 +672,11 @@ impl ExecutionMetrics {
     pub fn cpu_utilization(&self) -> f64 {
         let active = self.active_thread_ns.load(Ordering::Relaxed) as f64;
         let cap = self.total_thread_capacity_ns.load(Ordering::Relaxed) as f64;
-        if cap == 0.0 { 0.0 } else { (active / cap).min(1.0) }
+        if cap == 0.0 {
+            0.0
+        } else {
+            (active / cap).min(1.0)
+        }
     }
 
     // â”€â”€ Snapshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -707,9 +746,9 @@ impl DeterministicExecutionGuard {
         if a.len() != b.len() {
             return false;
         }
-        a.iter().zip(b.iter()).all(|(x, y)| {
-            x.tx_index == y.tx_index && x.write_set == y.write_set
-        })
+        a.iter()
+            .zip(b.iter())
+            .all(|(x, y)| x.tx_index == y.tx_index && x.write_set == y.write_set)
     }
 }
 
@@ -778,10 +817,9 @@ impl StateConsistencyChecker {
 
     fn hash_key(key: &[u8]) -> u64 {
         // Simple polynomial rolling hash â€” fast and dependency-free.
-        key.iter()
-            .fold(14695981039346656037u64, |h, &b| {
-                h.wrapping_mul(1099511628211) ^ (b as u64)
-            })
+        key.iter().fold(14695981039346656037u64, |h, &b| {
+            h.wrapping_mul(1099511628211) ^ (b as u64)
+        })
     }
 }
 
@@ -867,7 +905,10 @@ impl ConflictResolver {
             .into_iter()
             .map(|tx| {
                 if abort_set.contains(&tx) {
-                    ConflictResolution::Aborted { tx_index: tx, round }
+                    ConflictResolution::Aborted {
+                        tx_index: tx,
+                        round,
+                    }
                 } else {
                     ConflictResolution::Retained { tx_index: tx }
                 }
@@ -1065,7 +1106,11 @@ impl ParallelExecutor {
 
         while !pending.is_empty() && rounds < self.config.max_rounds {
             rounds += 1;
-            debug!("OCC round {}: {} pending transactions", rounds, pending.len());
+            debug!(
+                "OCC round {}: {} pending transactions",
+                rounds,
+                pending.len()
+            );
 
             // Phase 25 â€” sort tasks into canonical order before each round
             DeterministicExecutionGuard::sort_tasks(&mut pending);
@@ -1080,7 +1125,8 @@ impl ParallelExecutor {
                 }
             }
 
-            let mut executed_outputs = self.execute_batch(&tasks_to_execute, &executor_fn, &mv_memory, &retry_counts)?;
+            let mut executed_outputs =
+                self.execute_batch(&tasks_to_execute, &executor_fn, &mv_memory, &retry_counts)?;
             executed_outputs.extend(round_cached);
             executed_outputs.sort_by_key(|entry| entry.task.tx_index);
 
@@ -1091,7 +1137,12 @@ impl ParallelExecutor {
                         entry.output.tx_index,
                         ReadWriteSet::new(
                             entry.output.read_set.clone(),
-                            entry.output.write_set.iter().map(|(k, _)| k.clone()).collect(),
+                            entry
+                                .output
+                                .write_set
+                                .iter()
+                                .map(|(k, _)| k.clone())
+                                .collect(),
                         ),
                     )
                 })
@@ -1130,7 +1181,12 @@ impl ParallelExecutor {
 
             for entry in executed_outputs {
                 let tx_index = entry.output.tx_index;
-                let write_keys: Vec<Vec<u8>> = entry.output.write_set.iter().map(|(k, _)| k.clone()).collect();
+                let write_keys: Vec<Vec<u8>> = entry
+                    .output
+                    .write_set
+                    .iter()
+                    .map(|(k, _)| k.clone())
+                    .collect();
                 let intersects_committed = entry
                     .output
                     .read_set
@@ -1138,7 +1194,10 @@ impl ParallelExecutor {
                     .chain(write_keys.iter())
                     .any(|key| committed_write_keys.contains(key));
 
-                if conflict_set.contains(&tx_index) || intersects_committed || !mv_memory.validate_reads(entry.tx_version)? {
+                if conflict_set.contains(&tx_index)
+                    || intersects_committed
+                    || !mv_memory.validate_reads(entry.tx_version)?
+                {
                     // item 5 / 6 â€” rollback & retry
                     debug!("Rolling back tx {} (conflict); rescheduling", tx_index);
                     mv_memory.discard_speculative(entry.tx_version)?;
@@ -1155,7 +1214,11 @@ impl ParallelExecutor {
                     for key in &write_keys {
                         committed_write_keys.insert(key.clone());
                     }
-                    let tx_outcome = Self::raw_to_outcome(entry.output.clone(), Some(entry.tx_version), rounds - 1);
+                    let tx_outcome = Self::raw_to_outcome(
+                        entry.output.clone(),
+                        Some(entry.tx_version),
+                        rounds - 1,
+                    );
                     cached_outputs.insert(tx_index, entry.clone());
                     commit_queue.enqueue(tx_outcome);
                 }
@@ -1192,7 +1255,12 @@ impl ParallelExecutor {
 
         {
             let st = state.lock().map_err(|_| anyhow!("State lock poisoned"))?;
-            Self::finalize(&committed, &*st, &self.hot_cache, self.config.write_batch_size)?;
+            Self::finalize(
+                &committed,
+                &*st,
+                &self.hot_cache,
+                self.config.write_batch_size,
+            )?;
         }
 
         // Phase 25 â€” record committed writes into the consistency checker
@@ -1210,11 +1278,8 @@ impl ParallelExecutor {
         // KPI 5: approximate CPU utilization: all threads were active for the
         // parallel portion; serial portion used 1 thread.
         let wall_ns = elapsed.as_nanos() as u64;
-        self.metrics.record_cpu(
-            wall_ns,
-            wall_ns,
-            self.config.num_threads as u64,
-        );
+        self.metrics
+            .record_cpu(wall_ns, wall_ns, self.config.num_threads as u64);
 
         info!(
             "execute_block complete: {} results, {} conflicts, {} rounds, {} gas, latency={:.2}ms",
@@ -1256,33 +1321,41 @@ impl ParallelExecutor {
         let mv_memory = Arc::clone(mv_memory);
         let batch_start = Instant::now();
         let outcomes: Vec<CachedSpeculativeExecution> = self.thread_pool.install(|| {
-            tasks.par_iter().map(|task| {
-                let context = ctx_pool.acquire();
-                let retry_round = retry_counts.get(&task.tx_index).copied().unwrap_or(0);
-                let tx_version = TxVersion { tx_index: task.tx_index, incarnation: retry_round };
-                let snapshot_id = SnapshotId::new((retry_round as u64) + (task.tx_index as u64) + 1);
-                let output = fn_arc(task, snapshot_id, &mv_memory);
-                for key in &output.read_set {
-                    let _ = mv_memory.read_at_version(tx_version, key);
-                }
-                for (key, value) in &output.write_set {
-                    let _ = mv_memory.record_speculative_write(tx_version, key.clone(), value.clone());
-                }
-                ctx_pool.release(context);
-                CachedSpeculativeExecution {
-                    task: task.clone(),
-                    output,
-                    tx_version,
-                }
-            }).collect()
+            tasks
+                .par_iter()
+                .map(|task| {
+                    let context = ctx_pool.acquire();
+                    let retry_round = retry_counts.get(&task.tx_index).copied().unwrap_or(0);
+                    let tx_version = TxVersion {
+                        tx_index: task.tx_index,
+                        incarnation: retry_round,
+                    };
+                    let snapshot_id =
+                        SnapshotId::new((retry_round as u64) + (task.tx_index as u64) + 1);
+                    let output = fn_arc(task, snapshot_id, &mv_memory);
+                    for key in &output.read_set {
+                        let _ = mv_memory.read_at_version(tx_version, key);
+                    }
+                    for (key, value) in &output.write_set {
+                        let _ = mv_memory.record_speculative_write(
+                            tx_version,
+                            key.clone(),
+                            value.clone(),
+                        );
+                    }
+                    ctx_pool.release(context);
+                    CachedSpeculativeExecution {
+                        task: task.clone(),
+                        output,
+                        tx_version,
+                    }
+                })
+                .collect()
         });
         let batch_ns = batch_start.elapsed().as_nanos() as u64;
         // KPI 5 accumulation (wall ns only; active fraction recorded in execute_block)
-        self.metrics.record_cpu(
-            batch_ns,
-            batch_ns,
-            self.config.num_threads as u64,
-        );
+        self.metrics
+            .record_cpu(batch_ns, batch_ns, self.config.num_threads as u64);
         Ok(outcomes)
     }
 
@@ -1322,17 +1395,14 @@ impl ParallelExecutor {
 
         for i in 0..n {
             let (idx_i, rws_i) = &rw_pairs[i];
-            let write_i: HashSet<&[u8]> =
-                rws_i.write_set.iter().map(|v| v.as_slice()).collect();
-            let read_i: HashSet<&[u8]> =
-                rws_i.read_set.iter().map(|v| v.as_slice()).collect();
+            let write_i: HashSet<&[u8]> = rws_i.write_set.iter().map(|v| v.as_slice()).collect();
+            let read_i: HashSet<&[u8]> = rws_i.read_set.iter().map(|v| v.as_slice()).collect();
 
             for j in (i + 1)..n {
                 let (idx_j, rws_j) = &rw_pairs[j];
                 let write_j: HashSet<&[u8]> =
                     rws_j.write_set.iter().map(|v| v.as_slice()).collect();
-                let read_j: HashSet<&[u8]> =
-                    rws_j.read_set.iter().map(|v| v.as_slice()).collect();
+                let read_j: HashSet<&[u8]> = rws_j.read_set.iter().map(|v| v.as_slice()).collect();
 
                 // RAW: earlier tx i wrote something that later tx j reads
                 let mut raw_keys: Vec<Vec<u8>> =
@@ -1375,8 +1445,11 @@ impl ParallelExecutor {
                 conflicting_keys.sort();
 
                 // Winner = earlier (lower-index) tx; loser = later tx
-                let (winner_tx, loser_tx) =
-                    if idx_i < idx_j { (*idx_i, *idx_j) } else { (*idx_j, *idx_i) };
+                let (winner_tx, loser_tx) = if idx_i < idx_j {
+                    (*idx_i, *idx_j)
+                } else {
+                    (*idx_j, *idx_i)
+                };
 
                 details.push(ConflictDetail {
                     winner_tx,
@@ -1398,7 +1471,10 @@ impl ParallelExecutor {
     /// rolling back is a logical no-op â€” the task is simply not accumulated.
     #[allow(dead_code)]
     fn rollback(task: &ParallelExecutorTask) {
-        debug!("rollback: discarding speculative writes for tx {}", task.tx_index);
+        debug!(
+            "rollback: discarding speculative writes for tx {}",
+            task.tx_index
+        );
     }
 
     // â”€â”€ item 6: retry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1438,7 +1514,10 @@ impl ParallelExecutor {
         if !batch.is_empty() {
             batch.flush(state, cache)?;
         }
-        debug!("finalize: applied {} transaction write sets to state", outcomes.len());
+        debug!(
+            "finalize: applied {} transaction write sets to state",
+            outcomes.len()
+        );
         Ok(())
     }
 
@@ -1463,8 +1542,11 @@ impl ParallelExecutor {
     /// quick per-block diagnostics.
     pub fn record_metrics(&self, result: &BatchExecutionResult) -> MetricsSnapshot {
         let total = result.results.len();
-        let conflict_rate =
-            if total > 0 { result.conflict_count as f64 / total as f64 } else { 0.0 };
+        let conflict_rate = if total > 0 {
+            result.conflict_count as f64 / total as f64
+        } else {
+            0.0
+        };
 
         let snap = self.metrics.snapshot();
 
@@ -1504,8 +1586,7 @@ impl ParallelExecutor {
             Receipt::new_failure(o.tx_hash, o.gas_used)
         };
 
-        let speculative_writes: HashMap<Vec<u8>, Vec<u8>> =
-            o.write_set.iter().cloned().collect();
+        let speculative_writes: HashMap<Vec<u8>, Vec<u8>> = o.write_set.iter().cloned().collect();
 
         TxExecutionOutcome {
             tx_index: o.tx_index,
@@ -1586,7 +1667,12 @@ impl BlockExecutionPipeline {
         let executor = ParallelExecutor::new(config.parallel_config.clone())?;
         let commit_manager = CommitManager::new(config.commit_config.clone());
         let scheduler = BlockScheduler::new(config.scheduler_config.clone())?;
-        Ok(Self { config, executor, commit_manager, scheduler })
+        Ok(Self {
+            config,
+            executor,
+            commit_manager,
+            scheduler,
+        })
     }
 
     // item 1
@@ -1630,7 +1716,11 @@ impl BlockExecutionPipeline {
         tasks
             .iter()
             .map(|task| {
-                let raw = executor_fn(task, SnapshotId::new((task.tx_index + 1) as u64), &mv_memory);
+                let raw = executor_fn(
+                    task,
+                    SnapshotId::new((task.tx_index + 1) as u64),
+                    &mv_memory,
+                );
                 ParallelExecutor::raw_to_outcome(raw, None, 0)
             })
             .collect()
@@ -1638,7 +1728,10 @@ impl BlockExecutionPipeline {
 
     // item 5
     /// Sort outcomes in canonical tx_index order.
-    pub fn collect_results(&self, mut outcomes: Vec<TxExecutionOutcome>) -> Vec<TxExecutionOutcome> {
+    pub fn collect_results(
+        &self,
+        mut outcomes: Vec<TxExecutionOutcome>,
+    ) -> Vec<TxExecutionOutcome> {
         outcomes.sort_by_key(|o| o.tx_index);
         outcomes
     }
@@ -1677,8 +1770,11 @@ impl BlockExecutionPipeline {
 
         let tx_count = tasks.len();
         let outcomes: Vec<TxExecutionOutcome> = if self.is_parallel_enabled() {
-            let batch =
-                self.executor.execute_block(tasks.clone(), Arc::clone(&state), executor_fn.clone())?;
+            let batch = self.executor.execute_block(
+                tasks.clone(),
+                Arc::clone(&state),
+                executor_fn.clone(),
+            )?;
             batch.results
         } else {
             self.serial_execute(&tasks, executor_fn)
@@ -1766,7 +1862,10 @@ mod pipeline_tests {
         // tx 0 writes [1] and [2]; tx 1 reads [1] and writes [2]
         // -> RAW on [1], WAW on [2], kind = RawAndWaw
         let pairs = vec![
-            (0usize, ReadWriteSet::new(vec![], vec![vec![1u8], vec![2u8]])),
+            (
+                0usize,
+                ReadWriteSet::new(vec![], vec![vec![1u8], vec![2u8]]),
+            ),
             (1usize, ReadWriteSet::new(vec![vec![1u8]], vec![vec![2u8]])),
         ];
         let details = ParallelExecutor::detect_conflicts_detailed(&pairs);
@@ -1921,9 +2020,12 @@ mod pipeline_tests {
     #[test]
     fn prefetcher_enqueue_populates_queue() {
         let mut pf = StateKeyPrefetcher::new();
-        let tasks = vec![
-            ParallelExecutorTask { tx_index: 0, tx_bytes: vec![], tx_hash: [1u8; 32], gas_limit: 0 },
-        ];
+        let tasks = vec![ParallelExecutorTask {
+            tx_index: 0,
+            tx_bytes: vec![],
+            tx_hash: [1u8; 32],
+            gas_limit: 0,
+        }];
         pf.enqueue_batch(&tasks);
         // Each task contributes 2 keys (sender-like + recipient-like)
         assert_eq!(pf.prefetch_queue.len(), 2);
@@ -2004,9 +2106,24 @@ mod pipeline_tests {
     #[test]
     fn deterministic_guard_sorts_tasks() {
         let mut tasks = vec![
-            ParallelExecutorTask { tx_index: 3, tx_bytes: vec![], tx_hash: [0; 32], gas_limit: 0 },
-            ParallelExecutorTask { tx_index: 1, tx_bytes: vec![], tx_hash: [0; 32], gas_limit: 0 },
-            ParallelExecutorTask { tx_index: 2, tx_bytes: vec![], tx_hash: [0; 32], gas_limit: 0 },
+            ParallelExecutorTask {
+                tx_index: 3,
+                tx_bytes: vec![],
+                tx_hash: [0; 32],
+                gas_limit: 0,
+            },
+            ParallelExecutorTask {
+                tx_index: 1,
+                tx_bytes: vec![],
+                tx_hash: [0; 32],
+                gas_limit: 0,
+            },
+            ParallelExecutorTask {
+                tx_index: 2,
+                tx_bytes: vec![],
+                tx_hash: [0; 32],
+                gas_limit: 0,
+            },
         ];
         DeterministicExecutionGuard::sort_tasks(&mut tasks);
         let indices: Vec<usize> = tasks.iter().map(|t| t.tx_index).collect();
@@ -2016,8 +2133,17 @@ mod pipeline_tests {
     #[test]
     fn deterministic_guard_sorts_outcomes() {
         let make = |i: usize| RawOutcome {
-            tx_index: i, tx_hash: [0; 32], gas_limit: 0, gas_used: 0,
-            success: true, revert_reason: None, write_set: vec![], read_set: vec![], events: vec![], return_data: vec![], execution_status: true,
+            tx_index: i,
+            tx_hash: [0; 32],
+            gas_limit: 0,
+            gas_used: 0,
+            success: true,
+            revert_reason: None,
+            write_set: vec![],
+            read_set: vec![],
+            events: vec![],
+            return_data: vec![],
+            execution_status: true,
         };
         let mut outcomes = vec![make(5), make(2), make(9)];
         DeterministicExecutionGuard::sort_outcomes(&mut outcomes);
@@ -2028,8 +2154,17 @@ mod pipeline_tests {
     #[test]
     fn deterministic_verify_same_outcomes() {
         let make = |i: usize, writes: Vec<(Vec<u8>, Vec<u8>)>| RawOutcome {
-            tx_index: i, tx_hash: [0; 32], gas_limit: 0, gas_used: 0,
-            success: true, revert_reason: None, write_set: writes, read_set: vec![], events: vec![], return_data: vec![], execution_status: true,
+            tx_index: i,
+            tx_hash: [0; 32],
+            gas_limit: 0,
+            gas_used: 0,
+            success: true,
+            revert_reason: None,
+            write_set: writes,
+            read_set: vec![],
+            events: vec![],
+            return_data: vec![],
+            execution_status: true,
         };
         let a = vec![make(0, vec![(vec![1], vec![2])]), make(1, vec![])];
         let b = vec![make(0, vec![(vec![1], vec![2])]), make(1, vec![])];
@@ -2039,8 +2174,17 @@ mod pipeline_tests {
     #[test]
     fn deterministic_verify_divergent_outcomes() {
         let make = |i: usize, v: u8| RawOutcome {
-            tx_index: i, tx_hash: [0; 32], gas_limit: 0, gas_used: 0,
-            success: true, revert_reason: None, write_set: vec![(vec![1], vec![v])], read_set: vec![], events: vec![], return_data: vec![], execution_status: true,
+            tx_index: i,
+            tx_hash: [0; 32],
+            gas_limit: 0,
+            gas_used: 0,
+            success: true,
+            revert_reason: None,
+            write_set: vec![(vec![1], vec![v])],
+            read_set: vec![],
+            events: vec![],
+            return_data: vec![],
+            execution_status: true,
         };
         let a = vec![make(0, 10)];
         let b = vec![make(0, 99)]; // different write value
@@ -2055,10 +2199,17 @@ mod pipeline_tests {
             let mut writes = HashMap::new();
             writes.insert(key, val);
             TxExecutionOutcome {
-                tx_index: 0, snapshot_id: None, success: true, gas_used: 0,
-                output: vec![], rw_set: ReadWriteSet::new(vec![], vec![]),
+                tx_index: 0,
+                snapshot_id: None,
+                success: true,
+                gas_used: 0,
+                output: vec![],
+                rw_set: ReadWriteSet::new(vec![], vec![]),
                 receipt: Receipt::new_success([0u8; 32], 0, None),
-                speculative_writes: writes, error: None, had_conflict: false, retry_round: 0,
+                speculative_writes: writes,
+                error: None,
+                had_conflict: false,
+                retry_round: 0,
             }
         };
         let outcomes = vec![make_outcome(vec![1u8], vec![2u8])];
@@ -2076,7 +2227,12 @@ mod pipeline_tests {
     // â”€â”€ Phase 25 â€” ConflictResolver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     fn make_conflict(winner: usize, loser: usize) -> ConflictDetail {
-        ConflictDetail { winner_tx: winner, loser_tx: loser, kind: ConflictKind::Raw, conflicting_keys: vec![vec![1u8]] }
+        ConflictDetail {
+            winner_tx: winner,
+            loser_tx: loser,
+            kind: ConflictKind::Raw,
+            conflicting_keys: vec![vec![1u8]],
+        }
     }
 
     #[test]
@@ -2111,11 +2267,17 @@ mod pipeline_tests {
 
     fn make_tx_outcome(tx_index: usize) -> TxExecutionOutcome {
         TxExecutionOutcome {
-            tx_index, snapshot_id: None, success: true, gas_used: 0,
-            output: vec![], rw_set: ReadWriteSet::new(vec![], vec![]),
+            tx_index,
+            snapshot_id: None,
+            success: true,
+            gas_used: 0,
+            output: vec![],
+            rw_set: ReadWriteSet::new(vec![], vec![]),
             receipt: Receipt::new_success([0u8; 32], 0, None),
-            speculative_writes: HashMap::new(), error: None,
-            had_conflict: false, retry_round: 0,
+            speculative_writes: HashMap::new(),
+            error: None,
+            had_conflict: false,
+            retry_round: 0,
         }
     }
 
@@ -2136,7 +2298,11 @@ mod pipeline_tests {
         let mut q = OrderedCommitQueue::new(0);
         // Deliver out of order: 2 arrives before 0 and 1
         q.enqueue(make_tx_outcome(2));
-        assert_eq!(q.drain_ordered().len(), 0, "tx 2 cannot commit until 0 and 1 are ready");
+        assert_eq!(
+            q.drain_ordered().len(),
+            0,
+            "tx 2 cannot commit until 0 and 1 are ready"
+        );
         q.enqueue(make_tx_outcome(0));
         assert_eq!(q.drain_ordered().len(), 1, "only tx 0 should be released");
         q.enqueue(make_tx_outcome(1));

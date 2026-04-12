@@ -163,8 +163,7 @@ impl VerkleTree {
         let index = path[0];
         let mut child = node
             .remove_child(index)?
-            .ok_or_else(|| anyhow!("key does not exist in verkle tree"))?
-;
+            .ok_or_else(|| anyhow!("key does not exist in verkle tree"))?;
         Self::update_recursive(&mut child, &path[1..], value)?;
         node.set_child(index, child)?;
         Ok(())
@@ -343,11 +342,13 @@ mod tests {
     fn insert_recursive_and_update_recursive_enforce_expected_rules() {
         let mut root = VerkleNode::new_internal(0);
 
-        VerkleTree::insert_recursive(&mut root, &[], value(4)).expect("root value insert should succeed");
+        VerkleTree::insert_recursive(&mut root, &[], value(4))
+            .expect("root value insert should succeed");
         assert_eq!(root.value, Some(value(4)));
         assert!(VerkleTree::insert_recursive(&mut root, &[], value(5)).is_err());
 
-        VerkleTree::update_recursive(&mut root, &[], value(6)).expect("root value update should succeed");
+        VerkleTree::update_recursive(&mut root, &[], value(6))
+            .expect("root value update should succeed");
         assert_eq!(root.value, Some(value(6)));
         root.clear_value();
         assert!(VerkleTree::update_recursive(&mut root, &[], value(7)).is_err());
@@ -371,8 +372,10 @@ mod tests {
     #[test]
     fn counts_and_clear_reflect_tree_contents() {
         let mut tree = VerkleTree::new();
-        tree.insert(key(1), value(1)).expect("insert should succeed");
-        tree.insert(key(2), value(2)).expect("insert should succeed");
+        tree.insert(key(1), value(1))
+            .expect("insert should succeed");
+        tree.insert(key(2), value(2))
+            .expect("insert should succeed");
 
         assert!(tree.node_count() > 1);
         assert_eq!(tree.leaf_count(), 2);
@@ -383,7 +386,8 @@ mod tests {
         assert_eq!(tree.node_count(), 1);
         assert_eq!(tree.leaf_count(), 0);
         assert_ne!(tree.root_commitment(), non_empty_root);
-        tree.validate_tree().expect("cleared tree should stay valid");
+        tree.validate_tree()
+            .expect("cleared tree should stay valid");
     }
 
     #[test]
@@ -391,7 +395,8 @@ mod tests {
         let mut tree = VerkleTree::new();
         let existing_key = key(5);
 
-        tree.insert(existing_key, value(1)).expect("insert should succeed");
+        tree.insert(existing_key, value(1))
+            .expect("insert should succeed");
         assert!(tree.insert(existing_key, value(2)).is_err());
         assert!(tree.delete(key(6)).is_err());
     }
@@ -399,8 +404,10 @@ mod tests {
     #[test]
     fn polynomial_commitment_is_deterministic_for_children() {
         let mut root = VerkleNode::new_internal(0);
-        root.set_child(1, VerkleNode::new_internal(1)).expect("set_child should succeed");
-        root.set_child(2, VerkleNode::new_internal(1)).expect("set_child should succeed");
+        root.set_child(1, VerkleNode::new_internal(1))
+            .expect("set_child should succeed");
+        root.set_child(2, VerkleNode::new_internal(1))
+            .expect("set_child should succeed");
 
         let first = VerkleTree::compute_polynomial_commitment(&root.children);
         let second = VerkleTree::compute_polynomial_commitment(&root.children);
@@ -414,7 +421,8 @@ mod tests {
         let mut tree = VerkleTree::new();
         let empty_root = tree.root_commitment();
 
-        tree.insert(key(10), value(10)).expect("insert should succeed");
+        tree.insert(key(10), value(10))
+            .expect("insert should succeed");
         let inserted_root = tree.root_commitment();
         assert_ne!(inserted_root, empty_root);
 
@@ -425,10 +433,15 @@ mod tests {
     #[test]
     fn commitment_verification_detects_valid_and_invalid_state() {
         let mut tree = VerkleTree::new();
-        assert!(tree.verify_commitment().expect("empty tree verification should succeed"));
+        assert!(tree
+            .verify_commitment()
+            .expect("empty tree verification should succeed"));
 
-        tree.insert(key(11), value(11)).expect("insert should succeed");
-        assert!(tree.verify_commitment().expect("tree verification should succeed"));
+        tree.insert(key(11), value(11))
+            .expect("insert should succeed");
+        assert!(tree
+            .verify_commitment()
+            .expect("tree verification should succeed"));
 
         tree.root.commitment = [0u8; 32];
         assert!(tree.verify_commitment().is_err());
@@ -449,8 +462,13 @@ mod tests {
             .expect("batch commitment update should succeed");
 
         assert_eq!(batch_root, tree.root_commitment());
-        assert_eq!(tree.get(key(1)).expect("get should succeed"), Some(value(3)));
+        assert_eq!(
+            tree.get(key(1)).expect("get should succeed"),
+            Some(value(3))
+        );
         assert_eq!(tree.get(key(2)).expect("get should succeed"), None);
-        assert!(tree.verify_commitment().expect("tree verification should succeed"));
+        assert!(tree
+            .verify_commitment()
+            .expect("tree verification should succeed"));
     }
 }

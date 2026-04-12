@@ -1,12 +1,12 @@
-use clap::{Parser, Subcommand};
 use anyhow::Result;
+use clap::{Parser, Subcommand};
 use serde_json::json;
 use std::path::PathBuf;
 
 mod commands;
 mod utils;
 
-use commands::{account, transaction, node};
+use commands::{account, node, transaction};
 
 #[derive(Parser)]
 #[command(name = "vagecli")]
@@ -14,7 +14,12 @@ use commands::{account, transaction, node};
 #[command(version = "0.1.0")]
 struct Cli {
     /// URL of the VageChain RPC node (default: http://127.0.0.1:8080/rpc)
-    #[arg(short, long, global = true, default_value = "http://127.0.0.1:8080/rpc")]
+    #[arg(
+        short,
+        long,
+        global = true,
+        default_value = "http://127.0.0.1:8080/rpc"
+    )]
     rpc_url: String,
 
     #[command(subcommand)]
@@ -176,7 +181,9 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Account { action } => account::handle_account_command(action).await?,
-        Commands::Transaction { action } => transaction::handle_transaction_command(&cli.rpc_url, action).await?,
+        Commands::Transaction { action } => {
+            transaction::handle_transaction_command(&cli.rpc_url, action).await?
+        }
         Commands::Node { action } => node::handle_node_command(action).await?,
         Commands::Query { action } => {
             let client = reqwest::Client::new();
@@ -202,7 +209,10 @@ async fn main() -> Result<()> {
 
 async fn query_balance(client: &reqwest::Client, url: &str, address: &str) -> Result<()> {
     let response = utils::call_rpc(client, url, "vage_getBalance", vec![json!(address)]).await?;
-    let wei = response.as_str().map(|s| s.parse::<u128>().unwrap_or(0)).unwrap_or(0);
+    let wei = response
+        .as_str()
+        .map(|s| s.parse::<u128>().unwrap_or(0))
+        .unwrap_or(0);
     let tokens = wei as f64 / 1e18;
     println!("📊 Account Balance");
     println!("  Address:  {}", address);
@@ -219,7 +229,13 @@ async fn query_nonce(client: &reqwest::Client, url: &str, address: &str) -> Resu
 }
 
 async fn query_block(client: &reqwest::Client, url: &str, height: u64) -> Result<()> {
-    let response = utils::call_rpc(client, url, "vage_getBlockByNumber", vec![json!(format!("0x{:x}", height))]).await?;
+    let response = utils::call_rpc(
+        client,
+        url,
+        "vage_getBlockByNumber",
+        vec![json!(format!("0x{:x}", height))],
+    )
+    .await?;
     println!("🔗 Block #{}", height);
     println!("{}", serde_json::to_string_pretty(&response)?);
     Ok(())

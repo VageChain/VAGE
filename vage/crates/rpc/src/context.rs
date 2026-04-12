@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
-use vage_networking::P2PNetwork;
-use vage_mempool::Mempool;
 use vage_consensus::Consensus;
 use vage_execution::Executor;
+use vage_mempool::Mempool;
+use vage_networking::P2PNetwork;
 use vage_state::StateDB;
 use vage_storage::StorageEngine;
 
@@ -68,4 +68,3 @@ impl RpcContext {
         Arc::clone(&self.networking)
     }
 }
-

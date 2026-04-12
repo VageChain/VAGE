@@ -1,10 +1,6 @@
-use axum::{
-    routing::get,
-    Router, Json, http::StatusCode,
-    response::Html,
-};
-use serde::{Serialize, Deserialize};
-use sqlx::{SqlitePool, Row};
+use axum::{http::StatusCode, response::Html, routing::get, Json, Router};
+use serde::{Deserialize, Serialize};
+use sqlx::{Row, SqlitePool};
 use std::net::SocketAddr;
 use tracing::info;
 
@@ -26,12 +22,18 @@ pub struct ExplorerTx {
 }
 
 /// Start the Block Explorer's REST API and Dashboard server.
-pub async fn start_explorer_server(pool: SqlitePool, addr: SocketAddr) -> Result<(), anyhow::Error> {
+pub async fn start_explorer_server(
+    pool: SqlitePool,
+    addr: SocketAddr,
+) -> Result<(), anyhow::Error> {
     let pool1 = pool.clone();
     let pool2 = pool.clone();
     let app = Router::new()
         .route("/", get(dashboard_handler))
-        .route("/api/blocks", get(move || get_blocks_handler(pool1.clone())))
+        .route(
+            "/api/blocks",
+            get(move || get_blocks_handler(pool1.clone())),
+        )
         .route("/api/txs", get(move || get_txs_handler(pool2.clone())));
 
     info!("VageChain Block Explorer running at http://{}", addr);
@@ -43,7 +45,8 @@ pub async fn start_explorer_server(pool: SqlitePool, addr: SocketAddr) -> Result
 }
 
 async fn dashboard_handler() -> Html<&'static str> {
-    Html(r#"
+    Html(
+        r#"
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -102,13 +105,17 @@ async fn dashboard_handler() -> Html<&'static str> {
         </section>
     </body>
     </html>
-    "#)
+    "#,
+    )
 }
 
 async fn get_blocks_handler(pool: SqlitePool) -> Result<Json<Vec<ExplorerBlock>>, StatusCode> {
-    let rows = sqlx::query("SELECT height, hash, timestamp, tx_count FROM blocks ORDER BY height DESC LIMIT 20")
-        .fetch_all(&pool).await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = sqlx::query(
+        "SELECT height, hash, timestamp, tx_count FROM blocks ORDER BY height DESC LIMIT 20",
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut blocks = Vec::new();
     for row in rows {

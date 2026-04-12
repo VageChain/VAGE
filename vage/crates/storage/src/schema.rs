@@ -3,8 +3,7 @@ use redb::{Database, TableDefinition};
 use std::path::Path;
 
 /// Core blockchain tables
-pub const TABLE_BLOCK_HEADERS: TableDefinition<u64, &[u8]> =
-    TableDefinition::new("block_headers");
+pub const TABLE_BLOCK_HEADERS: TableDefinition<u64, &[u8]> = TableDefinition::new("block_headers");
 pub const TABLE_BLOCK_BODIES: TableDefinition<u64, &[u8]> = TableDefinition::new("block_bodies");
 pub const TABLE_TRANSACTIONS: TableDefinition<[u8; 32], &[u8]> =
     TableDefinition::new("transactions");
@@ -19,8 +18,7 @@ pub const TABLE_VERKLE_NODES: TableDefinition<[u8; 32], &[u8]> =
 pub const TABLE_ZK_PROOFS: TableDefinition<u64, &[u8]> = TableDefinition::new("zk_proofs");
 pub const TABLE_TX_BLOCK_INDEX: TableDefinition<[u8; 32], u64> =
     TableDefinition::new("tx_block_index");
-pub const TABLE_TX_RECEIPTS: TableDefinition<[u8; 32], &[u8]> =
-    TableDefinition::new("tx_receipts");
+pub const TABLE_TX_RECEIPTS: TableDefinition<[u8; 32], &[u8]> = TableDefinition::new("tx_receipts");
 pub const TABLE_VALIDATOR_SETS: TableDefinition<u64, &[u8]> =
     TableDefinition::new("validator_sets");
 pub const TABLE_SLASHING_RECORDS: TableDefinition<[u8; 32], &[u8]> =

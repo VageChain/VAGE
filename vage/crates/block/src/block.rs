@@ -1,9 +1,9 @@
 use crate::body::BlockBody;
 use crate::header::BlockHeader;
 use anyhow::{bail, Result};
-use vage_types::{BlockHeight, Canonical, Hash};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use vage_types::{BlockHeight, Canonical, Hash};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Block {
@@ -204,8 +204,8 @@ impl Block {
     pub fn quorum_cert_hash(&self) -> Hash {
         // A QC hash is usually a hash over the tuple (height, block_hash)
         let mut hasher = Sha256::new();
-        hasher.update(&self.height().to_le_bytes());
-        hasher.update(&self.hash());
+        hasher.update(self.height().to_le_bytes());
+        hasher.update(self.hash());
         let result = hasher.finalize();
         let mut h = [0u8; 32];
         h.copy_from_slice(&result);
@@ -275,12 +275,7 @@ mod tests {
     fn sample_block() -> Block {
         let mut header = BlockHeader::new([1u8; 32], 2);
         let mut body = BlockBody::new();
-        let tx = Transaction::new_transfer(
-            Address([2u8; 32]),
-            Address([3u8; 32]),
-            5u64.into(),
-            1,
-        );
+        let tx = Transaction::new_transfer(Address([2u8; 32]), Address([3u8; 32]), 5u64.into(), 1);
         let receipt = Receipt::new_success(tx.hash(), 21_000, Some([4u8; 32]));
         body.add_transaction(tx);
         body.add_receipt(receipt);
@@ -326,7 +321,9 @@ mod tests {
     fn validate_basic_checks_roots_transactions_and_receipts() {
         let block = sample_block();
         block.validate_basic().expect("valid block should pass");
-        block.validate_transactions().expect("transactions should validate");
+        block
+            .validate_transactions()
+            .expect("transactions should validate");
         block.validate_receipts().expect("receipts should validate");
         assert!(block.size_bytes() > 0);
     }
@@ -337,10 +334,10 @@ mod tests {
         let encoded = block.encode();
 
         let decoded = Block::decode(&encoded).expect("decode should succeed");
-        let storage_round_trip = Block::decode_storage(&block.encode_storage())
-            .expect("storage decode should succeed");
-        let network_round_trip = Block::decode_network(&block.encode_network())
-            .expect("network decode should succeed");
+        let storage_round_trip =
+            Block::decode_storage(&block.encode_storage()).expect("storage decode should succeed");
+        let network_round_trip =
+            Block::decode_network(&block.encode_network()).expect("network decode should succeed");
 
         assert_eq!(decoded, block);
         assert_eq!(storage_round_trip, block);
@@ -354,7 +351,10 @@ mod tests {
         let proposer = Address::from_public_key(&public_key);
         let mut block = sample_block();
         block.header.proposer = proposer;
-        block.header.sign(&signing_key).expect("signing should succeed");
+        block
+            .header
+            .sign(&signing_key)
+            .expect("signing should succeed");
 
         assert!(block
             .verify_header_signature(&public_key)

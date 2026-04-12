@@ -9,8 +9,8 @@ use sha2::{Digest, Sha256};
 /// Custom serde helpers for `Option<[u8; 64]>` (Ed25519 signature).
 /// Serde doesn't implement Deserialize for arrays larger than 32 out of the box.
 mod serde_sig {
-    use serde::{Deserializer, Serializer};
     use serde::de::Error;
+    use serde::{Deserializer, Serializer};
 
     pub fn serialize<S: Serializer>(val: &Option<[u8; 64]>, s: S) -> Result<S::Ok, S::Error> {
         match val {
@@ -244,12 +244,20 @@ impl Encodable for Transaction {
         s.begin_list(10);
         s.append(&self.from.0.as_slice());
         match &self.to {
-            Some(addr) => { s.append(&addr.0.as_slice()); }
-            None => { s.append_empty_data(); }
+            Some(addr) => {
+                s.append(&addr.0.as_slice());
+            }
+            None => {
+                s.append_empty_data();
+            }
         }
         match &self.signer_pubkey {
-            Some(pubkey) => { s.append(&pubkey.as_slice()); }
-            None => { s.append_empty_data(); }
+            Some(pubkey) => {
+                s.append(&pubkey.as_slice());
+            }
+            None => {
+                s.append_empty_data();
+            }
         }
         // U256 doesn't implement rlp::Encodable — encode as 32 big-endian bytes.
         let mut value_bytes = [0u8; 32];
@@ -262,8 +270,12 @@ impl Encodable for Transaction {
         s.append(&price_bytes.as_slice());
         s.append(&self.data);
         match &self.signature {
-            Some(sig) => { s.append(&sig.as_slice()); }
-            None => { s.append_empty_data(); }
+            Some(sig) => {
+                s.append(&sig.as_slice());
+            }
+            None => {
+                s.append_empty_data();
+            }
         }
         s.append(&self.chain_id.unwrap_or_default());
     }
@@ -274,9 +286,11 @@ impl Decodable for Transaction {
         Ok(Self {
             from: {
                 let bytes: Vec<u8> = rlp.val_at(0)?;
-                Address(bytes.try_into().map_err(|_| {
-                    rlp::DecoderError::Custom("Invalid from address length")
-                })?)
+                Address(
+                    bytes
+                        .try_into()
+                        .map_err(|_| rlp::DecoderError::Custom("Invalid from address length"))?,
+                )
             },
             to: {
                 let bytes: Vec<u8> = rlp.val_at(1)?;
@@ -350,11 +364,11 @@ mod tests {
 
         assert_eq!(transfer.to, Some(to));
         assert_eq!(transfer.signer_pubkey, None);
-        assert_eq!(transfer.gas_limit, 210);       // VageChain: 21_000 / 100
+        assert_eq!(transfer.gas_limit, 210); // VageChain: 21_000 / 100
         assert!(call.is_contract_call());
-        assert_eq!(call.gas_limit, 1_000);          // VageChain: 100_000 / 100
+        assert_eq!(call.gas_limit, 1_000); // VageChain: 100_000 / 100
         assert!(deploy.is_contract_creation());
-        assert_eq!(deploy.gas_limit, 10_000);       // VageChain: 1_000_000 / 100
+        assert_eq!(deploy.gas_limit, 10_000); // VageChain: 1_000_000 / 100
     }
 
     #[test]
@@ -369,19 +383,14 @@ mod tests {
 
         assert_eq!(tx.signer_pubkey, Some(public_key));
         assert!(tx.verify_signature().expect("verification should succeed"));
-        tx.validate_signature()
-            .expect("signature should validate");
+        tx.validate_signature().expect("signature should validate");
         assert_eq!(tx.sender().expect("sender recovery should work"), from);
     }
 
     #[test]
     fn sender_recovery_requires_embedded_public_key() {
-        let tx = Transaction::new_transfer(
-            Address([1u8; 32]),
-            Address([2u8; 32]),
-            U256::from(1u64),
-            0,
-        );
+        let tx =
+            Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(1u64), 0);
 
         assert!(tx.sender().is_err());
     }
@@ -416,12 +425,8 @@ mod tests {
 
     #[test]
     fn validation_helpers_reject_invalid_nonce_and_gas() {
-        let mut tx = Transaction::new_transfer(
-            Address([6u8; 32]),
-            Address([7u8; 32]),
-            U256::from(1u64),
-            3,
-        );
+        let mut tx =
+            Transaction::new_transfer(Address([6u8; 32]), Address([7u8; 32]), U256::from(1u64), 3);
 
         assert!(tx.validate_nonce(2).is_err());
 
@@ -432,12 +437,8 @@ mod tests {
 
     #[test]
     fn validate_basic_rejects_invalid_contract_deploys() {
-        let tx = Transaction::new_contract_deploy(
-            Address([8u8; 32]),
-            U256::from(1u64),
-            0,
-            Vec::new(),
-        );
+        let tx =
+            Transaction::new_contract_deploy(Address([8u8; 32]), U256::from(1u64), 0, Vec::new());
 
         assert!(tx.validate_basic().is_err());
     }
@@ -459,7 +460,8 @@ mod tests {
         let encoded = bincode::serialize(&tx).expect("bincode serialization should work");
         let decoded: Transaction =
             bincode::deserialize(&encoded).expect("bincode deserialization should work");
-        let rlp_round_trip = Transaction::rlp_decode(&tx.rlp_encode()).expect("rlp should round-trip");
+        let rlp_round_trip =
+            Transaction::rlp_decode(&tx.rlp_encode()).expect("rlp should round-trip");
 
         assert_eq!(decoded, tx);
         assert_eq!(rlp_round_trip, tx);
@@ -545,7 +547,8 @@ mod log_tests {
         let log = Log::new(Address([16u8; 32]), vec![[17u8; 32]], vec![18, 19]);
 
         let json = serde_json::to_string(&log).expect("log json serialization should work");
-        let decoded: Log = serde_json::from_str(&json).expect("log json deserialization should work");
+        let decoded: Log =
+            serde_json::from_str(&json).expect("log json deserialization should work");
 
         assert_eq!(decoded, log);
     }
@@ -650,7 +653,11 @@ mod receipt_tests {
     #[test]
     fn hash_and_bincode_are_deterministic() {
         let mut receipt = Receipt::new_success([8u8; 32], 42_000, Some([9u8; 32]));
-        receipt.add_log(Log::new(Address([10u8; 32]), vec![[11u8; 32]], vec![4, 5, 6]));
+        receipt.add_log(Log::new(
+            Address([10u8; 32]),
+            vec![[11u8; 32]],
+            vec![4, 5, 6],
+        ));
 
         let first_hash = receipt.hash();
         let second_hash = receipt.hash();

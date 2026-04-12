@@ -14,9 +14,7 @@ pub fn init_metrics_recorder() {
     if PROMETHEUS_HANDLE.get().is_some() {
         return;
     }
-    let handle = PrometheusBuilder::new()
-        .build_recorder()
-        .handle();
+    let handle = PrometheusBuilder::new().build_recorder().handle();
     // Install the recorder globally; PROMETHEUS_HANDLE gives us access for rendering.
     PrometheusBuilder::new()
         .install()
@@ -38,7 +36,8 @@ pub fn record_error(method: &str, code: i32) {
         "rpc_requests_failed_total",
         "method" => method.to_string(),
         "code" => code.to_string()
-    ).increment(1);
+    )
+    .increment(1);
 }
 
 /// Record the latency of a successful RPC response into a histogram.
@@ -47,7 +46,8 @@ pub fn record_latency(method: &str, start_time: Instant) {
     histogram!(
         "rpc_request_duration_seconds",
         "method" => method.to_string()
-    ).record(duration.as_secs_f64());
+    )
+    .record(duration.as_secs_f64());
 }
 
 /// Export current metrics as a Prometheus-formatted string for the `/metrics` endpoint.

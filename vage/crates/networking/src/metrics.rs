@@ -26,7 +26,8 @@ impl NetworkingMetrics {
             "vage_p2p_messages_total",
             "direction" => direction.to_string(),
             "topic" => topic.to_string()
-        ).increment(count);
+        )
+        .increment(count);
     }
 
     /// Record the current observed messages-per-second rate for a topic and direction.
@@ -35,15 +36,17 @@ impl NetworkingMetrics {
             "vage_p2p_messages_per_second",
             "direction" => direction.to_string(),
             "topic" => topic.to_string()
-        ).set(messages_per_second);
+        )
+        .set(messages_per_second);
     }
 
     /// Record total bandwidth usage in bytes.
     pub fn record_bandwidth(direction: &str, bytes: u64) {
         counter!(
-            "vage_p2p_bandwidth_bytes_total", 
+            "vage_p2p_bandwidth_bytes_total",
             "direction" => direction.to_string()
-        ).increment(bytes);
+        )
+        .increment(bytes);
     }
 
     /// Record end-to-end gossip propagation latency.
@@ -51,6 +54,7 @@ impl NetworkingMetrics {
         histogram!(
             "vage_p2p_gossip_propagation_latency_seconds",
             "topic" => topic.to_string()
-        ).record(latency.as_secs_f64());
+        )
+        .record(latency.as_secs_f64());
     }
 }

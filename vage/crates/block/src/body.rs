@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
-use vage_types::{Canonical, Hash, Receipt, Transaction, Validator};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use vage_types::{Canonical, Hash, Receipt, Transaction, Validator};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BlockBody {
@@ -86,14 +86,14 @@ impl BlockBody {
         }
 
         while leaves.len() > 1 {
-            if leaves.len() % 2 != 0 {
+            if !leaves.len().is_multiple_of(2) {
                 leaves.push(*leaves.last().unwrap());
             }
             let mut next_level = Vec::new();
             for i in (0..leaves.len()).step_by(2) {
                 let mut hasher = Sha256::new();
-                hasher.update(&leaves[i]);
-                hasher.update(&leaves[i + 1]);
+                hasher.update(leaves[i]);
+                hasher.update(leaves[i + 1]);
                 let result = hasher.finalize();
                 let mut h = [0u8; 32];
                 h.copy_from_slice(&result);
@@ -146,7 +146,7 @@ impl BlockBody {
         let mut current_index = index;
 
         while leaves.len() > 1 {
-            if leaves.len() % 2 != 0 {
+            if !leaves.len().is_multiple_of(2) {
                 leaves.push(*leaves.last().unwrap());
             }
 
@@ -160,8 +160,8 @@ impl BlockBody {
                 }
 
                 let mut hasher = Sha256::new();
-                hasher.update(&leaves[i]);
-                hasher.update(&leaves[i + 1]);
+                hasher.update(leaves[i]);
+                hasher.update(leaves[i + 1]);
                 let result = hasher.finalize();
                 let mut h = [0u8; 32];
                 h.copy_from_slice(&result);
@@ -179,12 +179,12 @@ impl BlockBody {
 
         for sib_hash in proof {
             let mut hasher = Sha256::new();
-            if current_index % 2 == 0 {
-                hasher.update(&current_hash);
+            if current_index.is_multiple_of(2) {
+                hasher.update(current_hash);
                 hasher.update(sib_hash);
             } else {
                 hasher.update(sib_hash);
-                hasher.update(&current_hash);
+                hasher.update(current_hash);
             }
             let result = hasher.finalize();
             current_hash.copy_from_slice(&result);

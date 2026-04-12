@@ -15,11 +15,11 @@
 //! Snapshots are gossiped on `TOPIC_STATE_SYNC` (see `networking::gossip`).
 
 use anyhow::{bail, Context, Result};
-use vage_state::StateDB;
-use vage_storage::StorageEngine;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::info;
+use vage_state::StateDB;
+use vage_storage::StorageEngine;
 
 /// Wire-format manifest that accompanies a compressed state chunk.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -153,7 +153,10 @@ impl StateSyncEngine {
             .and_then(|b| b.try_into().ok());
 
         // Commit and recompute.
-        let computed_root = self.state.commit().context("state commit after snapshot failed")?;
+        let computed_root = self
+            .state
+            .commit()
+            .context("state commit after snapshot failed")?;
 
         if computed_root != snapshot.manifest.state_root {
             bail!(
@@ -164,10 +167,8 @@ impl StateSyncEngine {
         }
 
         // Persist the verified state root.
-        self.storage.state_put(
-            b"metadata:state_root".to_vec(),
-            computed_root.to_vec(),
-        )?;
+        self.storage
+            .state_put(b"metadata:state_root".to_vec(), computed_root.to_vec())?;
 
         // Suppress unused-variable if stored_root isn't used further.
         let _ = stored_root;

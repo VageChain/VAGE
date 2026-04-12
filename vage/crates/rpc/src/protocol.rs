@@ -1,6 +1,6 @@
+use crate::error::JsonRpcError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::error::JsonRpcError;
 
 /// Standard JSON-RPC 2.0 request structure.
 #[derive(Debug, Clone, Serialize, Deserialize)]

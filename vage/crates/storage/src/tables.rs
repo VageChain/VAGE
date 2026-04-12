@@ -81,10 +81,7 @@ pub fn validate_schema(txn: &WriteTransaction) -> Result<()> {
     } else {
         // New database, set version
         let ver = SCHEMA_VERSION.to_string();
-        table.insert(
-            "schema_version",
-            ver.as_bytes(),
-        )?;
+        table.insert("schema_version", ver.as_bytes())?;
     }
 
     Ok(())
@@ -118,12 +115,22 @@ mod tests {
         tx.commit().expect("bootstrap transaction should commit");
 
         let read_tx = db.begin_read().expect("read tx should open");
-        read_tx.open_table(TABLE_METADATA).expect("metadata table should exist");
-        read_tx.open_table(TABLE_BLOCK_HEADERS).expect("block headers table should exist");
-        read_tx.open_table(TABLE_STATE).expect("state table should exist");
-        read_tx.open_table(TABLE_TX_RECEIPTS).expect("tx receipts table should exist");
+        read_tx
+            .open_table(TABLE_METADATA)
+            .expect("metadata table should exist");
+        read_tx
+            .open_table(TABLE_BLOCK_HEADERS)
+            .expect("block headers table should exist");
+        read_tx
+            .open_table(TABLE_STATE)
+            .expect("state table should exist");
+        read_tx
+            .open_table(TABLE_TX_RECEIPTS)
+            .expect("tx receipts table should exist");
 
-        let version_table = read_tx.open_table(TABLE_METADATA).expect("metadata table should open");
+        let version_table = read_tx
+            .open_table(TABLE_METADATA)
+            .expect("metadata table should open");
         let schema_version = version_table
             .get("schema_version")
             .expect("schema version lookup should succeed")
@@ -146,7 +153,9 @@ mod tests {
         let tx = db.begin_write().expect("write tx should open");
         create_tables(&tx).expect("table bootstrap should succeed");
         {
-            let mut table = tx.open_table(TABLE_METADATA).expect("metadata table should open");
+            let mut table = tx
+                .open_table(TABLE_METADATA)
+                .expect("metadata table should open");
             let future_version = (SCHEMA_VERSION + 1).to_string();
             table
                 .insert("schema_version", future_version.as_bytes())

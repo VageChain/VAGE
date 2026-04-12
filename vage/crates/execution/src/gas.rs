@@ -110,13 +110,17 @@ pub fn calculate_intrinsic_gas(data: &[u8]) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{GasMeter, INTRINSIC_GAS, STORAGE_READ_GAS, STORAGE_WRITE_GAS, VALUE_TRANSFER_GAS, CALLDATA_GAS, calculate_intrinsic_gas};
+    use super::{
+        calculate_intrinsic_gas, GasMeter, CALLDATA_GAS, INTRINSIC_GAS, STORAGE_READ_GAS,
+        STORAGE_WRITE_GAS, VALUE_TRANSFER_GAS,
+    };
     use primitive_types::U256;
     use vage_types::{Account, Address, Transaction};
 
     #[test]
     fn gas_meter_supports_limits_fees_refunds_and_cost_helpers() {
-        let tx = Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(1u64), 0);
+        let tx =
+            Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(1u64), 0);
         // Use a generous fixed limit so consume() does not exceed it.
         let gas_limit = 10_000u64;
         let mut meter = GasMeter::new(gas_limit);
@@ -131,15 +135,25 @@ mod tests {
         assert_eq!(meter.gas_cost_transfer(), VALUE_TRANSFER_GAS);
         assert_eq!(meter.gas_cost_storage_read(), STORAGE_READ_GAS);
         assert_eq!(meter.gas_cost_storage_write(), STORAGE_WRITE_GAS);
-        assert_eq!(meter.gas_cost_contract_call(), INTRINSIC_GAS + STORAGE_READ_GAS + STORAGE_WRITE_GAS);
+        assert_eq!(
+            meter.gas_cost_contract_call(),
+            INTRINSIC_GAS + STORAGE_READ_GAS + STORAGE_WRITE_GAS
+        );
 
         // Build a transaction whose gas_limit matches the meter limit for fee checks.
         let fee_tx = {
-            let mut t = Transaction::new_transfer(Address([1u8; 32]), Address([2u8; 32]), U256::from(1u64), 0);
+            let mut t = Transaction::new_transfer(
+                Address([1u8; 32]),
+                Address([2u8; 32]),
+                U256::from(1u64),
+                0,
+            );
             t.gas_limit = gas_limit;
             t
         };
-        let prepaid = meter.deduct_fee(&mut account, &fee_tx).expect("fee deduction should succeed");
+        let prepaid = meter
+            .deduct_fee(&mut account, &fee_tx)
+            .expect("fee deduction should succeed");
         assert_eq!(prepaid, fee_tx.gas_cost());
         let refund = meter.refund_unused(&mut account, &fee_tx);
         assert_eq!(refund, fee_tx.gas_cost() - U256::from(500u64));

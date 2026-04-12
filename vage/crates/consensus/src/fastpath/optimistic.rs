@@ -1,9 +1,9 @@
 use anyhow::{bail, Result};
-use vage_block::Block;
-use vage_types::{Address, NetworkMessage};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
+use vage_block::Block;
+use vage_types::{Address, NetworkMessage};
 
 /// Default fast-path window: block must collect â‰¥2/3 votes within this timeout.
 pub const FAST_PATH_TIMEOUT_MS: u64 = 200;
@@ -102,8 +102,7 @@ impl FastPath {
     /// Returns `true` when `signatures` contains at least `quorum_threshold`
     /// votes from distinct validators.
     pub fn has_quorum(&self, signatures: &[(Address, [u8; 64])], quorum_threshold: usize) -> bool {
-        let unique_validators: HashSet<Address> =
-            signatures.iter().map(|(v, _)| *v).collect();
+        let unique_validators: HashSet<Address> = signatures.iter().map(|(v, _)| *v).collect();
         unique_validators.len() >= quorum_threshold
     }
 
@@ -208,9 +207,9 @@ mod tests {
     use super::{FastPath, FAST_PATH_TIMEOUT_MS};
     use ed25519_dalek::SigningKey;
     use primitive_types::U256;
+    use std::time::Duration;
     use vage_block::{Block, BlockBody, BlockHeader};
     use vage_types::{Address, NetworkMessage, Transaction};
-    use std::time::Duration;
 
     fn signing_key(seed: u8) -> SigningKey {
         SigningKey::from_bytes(&[seed; 32])
@@ -256,14 +255,16 @@ mod tests {
 
         let signatures = vec![(validator_a, [1u8; 64]), (validator_b, [2u8; 64])];
         assert!(fast_path.verify_fast_votes(&signatures, 2));
-        assert!(!fast_path.verify_fast_votes(&[(validator_a, [1u8; 64]), (validator_a, [2u8; 64])], 2));
+        assert!(
+            !fast_path.verify_fast_votes(&[(validator_a, [1u8; 64]), (validator_a, [2u8; 64])], 2)
+        );
         assert!(fast_path.check_conditions(&block, &signatures, 2));
     }
 
     #[test]
     fn detect_conflicts_allows_unsigned_and_multi_sender_blocks_in_current_policy() {
         let fast_path = FastPath::new();
-        
+
         // Test 1: Properly signed block with transactions from proposer - no conflict
         let signed = signed_block();
         assert!(!fast_path.detect_conflicts(&signed));
@@ -284,7 +285,10 @@ mod tests {
         let body_3 = BlockBody::new(); // Empty
         let mut empty_signed = Block::new(header_3, body_3);
         empty_signed.compute_roots();
-        empty_signed.header.sign(&key_3).expect("sign should succeed");
+        empty_signed
+            .header
+            .sign(&key_3)
+            .expect("sign should succeed");
         assert!(!fast_path.detect_conflicts(&empty_signed));
 
         // Test 4: Block with transactions from different senders - currently allowed.
@@ -303,7 +307,10 @@ mod tests {
         body_4.add_receipt(vage_types::Receipt::new_success([8u8; 32], 21_000, None));
         let mut multi_sender = Block::new(header_4, body_4);
         multi_sender.compute_roots();
-        multi_sender.header.sign(&key_4).expect("sign should succeed");
+        multi_sender
+            .header
+            .sign(&key_4)
+            .expect("sign should succeed");
         assert!(!fast_path.detect_conflicts(&multi_sender));
     }
 
@@ -311,7 +318,10 @@ mod tests {
     fn fast_commit_and_broadcast_require_enabled_non_conflicting_block() {
         let fast_path = FastPath::new();
         let block = signed_block();
-        let signatures = vec![(Address([1u8; 32]), [1u8; 64]), (Address([2u8; 32]), [2u8; 64])];
+        let signatures = vec![
+            (Address([1u8; 32]), [1u8; 64]),
+            (Address([2u8; 32]), [2u8; 64]),
+        ];
 
         assert_eq!(
             fast_path
@@ -325,7 +335,8 @@ mod tests {
             .expect("broadcast should succeed")
         {
             NetworkMessage::GossipProposedBlock(bytes) => {
-                let decoded = Block::decode_network(&bytes).expect("broadcast payload should decode");
+                let decoded =
+                    Block::decode_network(&bytes).expect("broadcast payload should decode");
                 assert_eq!(decoded.hash(), block.hash());
             }
             other => panic!("unexpected broadcast message: {:?}", other),

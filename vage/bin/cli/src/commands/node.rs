@@ -74,20 +74,18 @@ async fn show_status() -> Result<()> {
     });
 
     match client.post(rpc_url).json(&payload).send().await {
-        Ok(response) => {
-            match response.json::<serde_json::Value>().await {
-                Ok(result) => {
-                    println!("✅ Node is running!");
-                    println!("RPC URL: {}", rpc_url);
-                    if let Some(state_root) = result.get("result") {
-                        println!("State Root: {}", state_root);
-                    }
-                }
-                Err(_) => {
-                    println!("❌ Node is not responding properly");
+        Ok(response) => match response.json::<serde_json::Value>().await {
+            Ok(result) => {
+                println!("✅ Node is running!");
+                println!("RPC URL: {}", rpc_url);
+                if let Some(state_root) = result.get("result") {
+                    println!("State Root: {}", state_root);
                 }
             }
-        }
+            Err(_) => {
+                println!("❌ Node is not responding properly");
+            }
+        },
         Err(_) => {
             println!("❌ Cannot connect to node");
             println!("📡 RPC URL: {}", rpc_url);

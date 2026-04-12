@@ -6,7 +6,6 @@
 /// The main entrypoint is [`BlockScheduler`], which wraps a rayon thread-pool,
 /// a task queue, and a worker registry to execute an entire block worth of
 /// transactions with deterministic, conflict-aware scheduling.
-
 use crate::parallel::dependency::{DependencyAnalyzer, ReadWriteSet};
 use anyhow::{anyhow, bail, Result};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -37,7 +36,10 @@ pub struct ExecutionBatch {
 
 impl ExecutionBatch {
     pub fn new(batch_id: usize, tx_indices: Vec<usize>) -> Self {
-        Self { batch_id, tx_indices }
+        Self {
+            batch_id,
+            tx_indices,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -62,7 +64,11 @@ pub struct ExecutionSchedule {
 }
 
 impl ExecutionSchedule {
-    pub fn new(batches: Vec<ExecutionBatch>, total_transactions: usize, strategy: SchedulingStrategy) -> Self {
+    pub fn new(
+        batches: Vec<ExecutionBatch>,
+        total_transactions: usize,
+        strategy: SchedulingStrategy,
+    ) -> Self {
         Self {
             batches,
             total_transactions,
@@ -146,7 +152,10 @@ impl Scheduler {
     }
 
     /// Batched DAG schedule: compute batch levels using the dependency graph.
-    pub fn batched_dag_schedule(graph: &HashMap<usize, Vec<usize>>, total_tx: usize) -> Result<ExecutionSchedule> {
+    pub fn batched_dag_schedule(
+        graph: &HashMap<usize, Vec<usize>>,
+        total_tx: usize,
+    ) -> Result<ExecutionSchedule> {
         // Compute the level of each transaction: the maximum distance from a source.
         let mut level = vec![0usize; total_tx];
 
@@ -191,7 +200,10 @@ impl Scheduler {
     }
 
     /// Greedy schedule: iteratively select all non-blocked transactions.
-    pub fn greedy_schedule(graph: &HashMap<usize, Vec<usize>>, total_tx: usize) -> Result<ExecutionSchedule> {
+    pub fn greedy_schedule(
+        graph: &HashMap<usize, Vec<usize>>,
+        total_tx: usize,
+    ) -> Result<ExecutionSchedule> {
         let mut executed = HashSet::new();
         let mut batches = Vec::new();
         let mut batch_id = 0;
@@ -200,7 +212,9 @@ impl Scheduler {
             let batch_txs = DependencyAnalyzer::next_parallel_batch(graph, total_tx, &executed)?;
 
             if batch_txs.is_empty() {
-                return Err(anyhow!("deadlock: no transactions can be scheduled (cycle?)"));
+                return Err(anyhow!(
+                    "deadlock: no transactions can be scheduled (cycle?)"
+                ));
             }
 
             executed.extend(&batch_txs);
@@ -503,7 +517,11 @@ impl BlockScheduler {
             }
         }
 
-        debug!(total_tx, batch_count = schedule.num_batches(), "tasks built");
+        debug!(
+            total_tx,
+            batch_count = schedule.num_batches(),
+            "tasks built"
+        );
         Ok(tasks)
     }
 
@@ -585,7 +603,10 @@ impl BlockScheduler {
                 break;
             }
             if ready.is_empty() {
-                bail!("scheduler deadlock: {} tasks blocked with none ready", blocked.len());
+                bail!(
+                    "scheduler deadlock: {} tasks blocked with none ready",
+                    blocked.len()
+                );
             }
 
             // item 9: rank ready tasks by dependents count.
@@ -621,10 +642,13 @@ impl BlockScheduler {
                         if notif.success {
                             TaskStatus::Completed
                         } else {
-                            TaskStatus::Failed { reason: notif.error.clone().unwrap_or_default() }
+                            TaskStatus::Failed {
+                                reason: notif.error.clone().unwrap_or_default(),
+                            }
                         },
                     );
-                    s.executed_rw_sets.insert(notif.tx_index, notif.actual_rw_set.clone());
+                    s.executed_rw_sets
+                        .insert(notif.tx_index, notif.actual_rw_set.clone());
                 }
             }
 
@@ -651,10 +675,17 @@ impl BlockScheduler {
                         executed.insert(notif.tx_index);
                         all_notifications.push(notif);
                     } else {
-                        debug!(tx_index = original.tx_index, retry = original.retry_count + 1, "rescheduling");
+                        debug!(
+                            tx_index = original.tx_index,
+                            retry = original.retry_count + 1,
+                            "rescheduling"
+                        );
                         // item 5: mark as conflicted.
                         let (lock, _) = self.state.as_ref();
-                        lock.lock().unwrap().task_status.insert(original.tx_index, TaskStatus::Conflicted);
+                        lock.lock()
+                            .unwrap()
+                            .task_status
+                            .insert(original.tx_index, TaskStatus::Conflicted);
                         aborted.push(original.as_retried());
                     }
                 } else {
@@ -679,8 +710,7 @@ impl BlockScheduler {
 
         info!(
             completed = all_notifications.len(),
-            total_tx,
-            "block execution finished; commit phase notified"
+            total_tx, "block execution finished; commit phase notified"
         );
         Ok(all_notifications)
     }
@@ -729,7 +759,9 @@ impl BlockScheduler {
     ) -> Vec<CommitNotification> {
         let (lock, cvar) = state.as_ref();
         let guard = cvar
-            .wait_while(lock.lock().unwrap(), |s| s.commit_notifications.len() < expected)
+            .wait_while(lock.lock().unwrap(), |s| {
+                s.commit_notifications.len() < expected
+            })
             .unwrap();
         guard.commit_notifications.clone()
     }
@@ -792,8 +824,18 @@ mod block_scheduler_tests {
         let mut graph = HashMap::new();
         graph.insert(1, vec![0]);
         graph.insert(2, vec![0]);
-        let v1: Vec<usize> = sched.build_tasks(3, &graph).unwrap().iter().map(|t| t.tx_index).collect();
-        let v2: Vec<usize> = sched.build_tasks(3, &graph).unwrap().iter().map(|t| t.tx_index).collect();
+        let v1: Vec<usize> = sched
+            .build_tasks(3, &graph)
+            .unwrap()
+            .iter()
+            .map(|t| t.tx_index)
+            .collect();
+        let v2: Vec<usize> = sched
+            .build_tasks(3, &graph)
+            .unwrap()
+            .iter()
+            .map(|t| t.tx_index)
+            .collect();
         assert_eq!(v1, v2);
     }
 
@@ -834,10 +876,8 @@ mod block_scheduler_tests {
     fn detect_conflicts_identifies_raw_conflict() {
         let rws0 = ReadWriteSet::new(vec![], vec![b"x".to_vec()]);
         let rws1 = ReadWriteSet::new(vec![b"x".to_vec()], vec![]);
-        let conflicts = BlockScheduler::detect_conflicts_in_batch(
-            &[(0, rws0), (1, rws1)],
-            &HashSet::new(),
-        );
+        let conflicts =
+            BlockScheduler::detect_conflicts_in_batch(&[(0, rws0), (1, rws1)], &HashSet::new());
         assert!(conflicts.contains(&1));
     }
 
@@ -845,10 +885,8 @@ mod block_scheduler_tests {
     fn detect_conflicts_no_conflict() {
         let rws0 = ReadWriteSet::new(vec![], vec![b"x".to_vec()]);
         let rws1 = ReadWriteSet::new(vec![], vec![b"y".to_vec()]);
-        let conflicts = BlockScheduler::detect_conflicts_in_batch(
-            &[(0, rws0), (1, rws1)],
-            &HashSet::new(),
-        );
+        let conflicts =
+            BlockScheduler::detect_conflicts_in_batch(&[(0, rws0), (1, rws1)], &HashSet::new());
         assert!(conflicts.is_empty());
     }
 

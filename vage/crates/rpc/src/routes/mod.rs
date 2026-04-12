@@ -1,5 +1,5 @@
 pub mod blocks;
-pub mod tx;
-pub mod state;
-pub mod network;
 pub mod health;
+pub mod network;
+pub mod state;
+pub mod tx;

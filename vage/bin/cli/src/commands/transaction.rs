@@ -1,9 +1,9 @@
-use crate::{TransactionCommands, utils};
+use crate::{utils, TransactionCommands};
 use anyhow::Result;
+use ed25519_dalek::{Signer, SigningKey};
 use serde_json::json;
 use std::time::Duration;
 use tokio::time::sleep;
-use ed25519_dalek::{SigningKey, Signer};
 
 pub async fn handle_transaction_command(rpc_url: &str, action: TransactionCommands) -> Result<()> {
     let client = reqwest::Client::new();
@@ -17,7 +17,17 @@ pub async fn handle_transaction_command(rpc_url: &str, action: TransactionComman
             nonce,
             gas,
         } => {
-            send_transaction(&client, rpc_url, &from, &to, &value, &private_key, nonce, gas).await?;
+            send_transaction(
+                &client,
+                rpc_url,
+                &from,
+                &to,
+                &value,
+                &private_key,
+                nonce,
+                gas,
+            )
+            .await?;
         }
         TransactionCommands::Status {
             hash,
@@ -132,17 +142,24 @@ async fn check_transaction_status(
     loop {
         poll_count += 1;
 
-        let response = utils::call_rpc(client, rpc_url, "vage_getTransactionByHash", vec![json!(hash)])
-            .await
-            .ok();
+        let response = utils::call_rpc(
+            client,
+            rpc_url,
+            "vage_getTransactionByHash",
+            vec![json!(hash)],
+        )
+        .await
+        .ok();
 
         if let Some(resp) = response {
             println!("Transaction Hash: {}", hash);
-            println!("Status: {}", resp.get("status").unwrap_or(&json!("unknown")));
+            println!(
+                "Status: {}",
+                resp.get("status").unwrap_or(&json!("unknown"))
+            );
             println!(
                 "Block: {}",
-                resp.get("blockHeight")
-                    .unwrap_or(&json!("pending"))
+                resp.get("blockHeight").unwrap_or(&json!("pending"))
             );
 
             if let Some(status) = resp.get("status").and_then(|s| s.as_str()) {
@@ -152,7 +169,10 @@ async fn check_transaction_status(
                 }
             }
         } else {
-            println!("⏳ Transaction pending (attempt {}/{})", poll_count, poll_max);
+            println!(
+                "⏳ Transaction pending (attempt {}/{})",
+                poll_count, poll_max
+            );
         }
 
         if poll_interval > 0 && poll_count < poll_max {
@@ -175,7 +195,13 @@ async fn get_pending_transactions(
     println!("📋 Pending Transactions");
     println!("═══════════════════════════════════════════════════════════");
 
-    let response = utils::call_rpc(client, rpc_url, "vage_getPendingTransactions", vec![json!(limit)]).await?;
+    let response = utils::call_rpc(
+        client,
+        rpc_url,
+        "vage_getPendingTransactions",
+        vec![json!(limit)],
+    )
+    .await?;
 
     if response.is_array() {
         let txs = response.as_array().unwrap();

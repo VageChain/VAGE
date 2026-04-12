@@ -3,10 +3,10 @@ use parking_lot::Mutex;
 use primitive_types::U256;
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use vage_state::StateDb;
-use vage_types::{Hash, Transaction};
 use std::collections::HashSet;
 use std::sync::Arc;
+use vage_state::StateDb;
+use vage_types::{Hash, Transaction};
 
 pub const MAX_TX_SIZE: usize = 128 * 1024;
 
@@ -152,7 +152,7 @@ impl TxValidator {
             .collect()
     }
 
-    //  Individual checks 
+    //  Individual checks
 
     /// Verify the ECDSA/BLS signature matches the declared sender.
     fn verify_transaction_signature(&self, tx: &Transaction) -> Result<()> {
@@ -180,7 +180,9 @@ impl TxValidator {
                 tx.nonce
             );
         }
-        let max_nonce = account.nonce.saturating_add(self.config.max_future_nonce_gap);
+        let max_nonce = account
+            .nonce
+            .saturating_add(self.config.max_future_nonce_gap);
         if tx.nonce > max_nonce {
             bail!(
                 "nonce too far in future (expected at most {}, got {})",

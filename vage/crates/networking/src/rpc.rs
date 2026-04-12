@@ -2,13 +2,13 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use libp2p::futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use libp2p::request_response::Codec;
-use vage_block::BlockHeader;
-use vage_state::RpcVerkleProof;
-use vage_types::{Account, Address};
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::time::Duration;
 use tokio::time;
+use vage_block::BlockHeader;
+use vage_state::RpcVerkleProof;
+use vage_types::{Account, Address};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RpcVerifiedHeaderEnvelope {
@@ -168,7 +168,11 @@ impl Codec for L1Codec {
     type Request = L1Request;
     type Response = L1Response;
 
-    async fn read_request<T>(&mut self, _: &libp2p::StreamProtocol, io: &mut T) -> io::Result<L1Request>
+    async fn read_request<T>(
+        &mut self,
+        _: &libp2p::StreamProtocol,
+        io: &mut T,
+    ) -> io::Result<L1Request>
     where
         T: AsyncRead + Unpin + Send,
     {
@@ -273,21 +277,20 @@ where
 mod tests {
     use super::{
         read_frame, write_frame, L1Codec, L1Request, L1Response, RpcStateProofQuery,
-        RpcStateProofRequest, RpcStateProofResponse, RpcStateProofValue,
-        RpcVerifiedHeaderEnvelope,
+        RpcStateProofRequest, RpcStateProofResponse, RpcStateProofValue, RpcVerifiedHeaderEnvelope,
         DEFAULT_RPC_TIMEOUT, MAX_RPC_MESSAGE_SIZE,
     };
     use futures::io::Cursor;
     use futures::task::{Context, Poll};
     use libp2p::request_response::Codec;
     use libp2p::StreamProtocol;
-    use vage_block::BlockHeader;
-    use vage_state::RpcVerkleProof;
-    use vage_types::{Account, Address};
     use std::io;
     use std::pin::Pin;
     use std::time::Duration;
     use tokio::time;
+    use vage_block::BlockHeader;
+    use vage_state::RpcVerkleProof;
+    use vage_types::{Account, Address};
 
     fn sample_state_proof() -> RpcStateProofResponse {
         RpcStateProofResponse {
@@ -309,8 +312,14 @@ mod tests {
 
     #[test]
     fn request_helpers_build_expected_variants() {
-        assert!(matches!(L1Request::request_block(42), L1Request::GetBlock(42)));
-        assert!(matches!(L1Request::request_headers(10, 12), L1Request::GetHeaders { start: 10, end: 12 }));
+        assert!(matches!(
+            L1Request::request_block(42),
+            L1Request::GetBlock(42)
+        ));
+        assert!(matches!(
+            L1Request::request_headers(10, 12),
+            L1Request::GetHeaders { start: 10, end: 12 }
+        ));
         let tx_hash = [9u8; 32];
         assert!(matches!(
             L1Request::request_transaction(tx_hash),
@@ -365,7 +374,8 @@ mod tests {
 
         let response = L1Response::respond_state_proof(Some(sample_state_proof()));
         let encoded_response = response.encode().expect("response should encode");
-        let decoded_response = L1Response::decode(&encoded_response).expect("response should decode");
+        let decoded_response =
+            L1Response::decode(&encoded_response).expect("response should decode");
         assert!(matches!(
             decoded_response,
             L1Response::StateProof(Some(payload)) if payload == sample_state_proof()
@@ -463,7 +473,9 @@ mod tests {
         let codec = L1Codec::default();
         let future = codec.with_timeout(async { Ok::<_, io::Error>(()) });
         let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
-        runtime.block_on(future).expect("default timeout should permit ready future");
+        runtime
+            .block_on(future)
+            .expect("default timeout should permit ready future");
         let _ = DEFAULT_RPC_TIMEOUT;
     }
 

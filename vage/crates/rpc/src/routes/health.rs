@@ -1,12 +1,10 @@
+use crate::context::RpcContext;
 use axum::{extract::State, Json};
 use serde_json::{json, Value};
 use std::sync::Arc;
-use crate::context::RpcContext;
 
 /// Simple health check handler for REST /health endpoint.
-pub async fn health_check(
-    State(context): State<Arc<RpcContext>>,
-) -> Json<Value> {
+pub async fn health_check(State(context): State<Arc<RpcContext>>) -> Json<Value> {
     let mut health_info = json!({
         "status": "healthy",
         "timestamp": chrono::Utc::now().to_rfc3339(),

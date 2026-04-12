@@ -175,11 +175,7 @@ impl<F: Field> ConstraintSynthesizer<F> for ExecutionCircuit<F> {
         // A satisfying assignment requires gas_used == gas_limit in the
         // field, acting as a range/equality check that total execution gas
         // is consistent with the block's declared gas limit.
-        cs.enforce_constraint(
-            lc!() + gas_used,
-            lc!() + Variable::One,
-            lc!() + gas_limit,
-        )?;
+        cs.enforce_constraint(lc!() + gas_used, lc!() + Variable::One, lc!() + gas_limit)?;
 
         // ── Step 8: enforce Merkle state inclusion ────────────────────────────
         //

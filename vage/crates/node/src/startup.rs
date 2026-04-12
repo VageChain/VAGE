@@ -2,12 +2,12 @@ use crate::node::{Node, NodeConfig};
 use anyhow::{Context, Result};
 use ed25519_dalek::SigningKey;
 use primitive_types::U256;
+use std::sync::Arc;
+use tracing::{info, warn};
 use vage_rpc::RpcServer;
 use vage_state::StateDB;
 use vage_storage::StorageEngine;
 use vage_types::Address;
-use std::sync::Arc;
-use tracing::{info, warn};
 
 const DEFAULT_CONFIG_PATH: &str = "config/node.json";
 
@@ -48,7 +48,10 @@ impl Startup {
     pub fn load_validator_keys(config: &NodeConfig) -> Result<(SigningKey, Address)> {
         // Reject the compile-time default key ([1u8;32]) to prevent accidental
         // production deployments that share keys with every other default node.
-        let all_same = config.proposer_private_key.iter().all(|&b| b == config.proposer_private_key[0]);
+        let all_same = config
+            .proposer_private_key
+            .iter()
+            .all(|&b| b == config.proposer_private_key[0]);
         if all_same {
             warn!(
                 "SECURITY: Proposer private key is a trivial repeated-byte value. \
@@ -82,7 +85,7 @@ impl Startup {
         let state = Arc::new(StateDB::new(storage.clone()));
         let latest_height = storage.latest_block_height()?;
         let restored_root = Self::restore_blockchain_state(storage.as_ref(), state.as_ref())?;
-        
+
         // Don't validate expected root at height 0, since genesis allocations will change it
         let expected_root = if latest_height > 0 {
             Some(restored_root)
@@ -118,10 +121,13 @@ impl Startup {
         alloc: &std::collections::HashMap<String, String>,
     ) -> Result<()> {
         let latest_height = storage.latest_block_height()?;
-        
+
         // Only apply genesis allocations at block 0 (fresh chain)
         if latest_height > 0 {
-            info!("Chain already initialized (height={}). Skipping genesis allocations.", latest_height);
+            info!(
+                "Chain already initialized (height={}). Skipping genesis allocations.",
+                latest_height
+            );
             return Ok(());
         }
 
@@ -131,14 +137,17 @@ impl Startup {
         }
 
         info!("Applying {} genesis allocations...", alloc.len());
-        
+
         for (address_str, balance_str) in alloc.iter() {
             // Parse address from hex string
             let addr_bytes = hex::decode(address_str.trim_start_matches("0x"))
                 .context(format!("Invalid address format: {}", address_str))?;
-            
+
             if addr_bytes.len() != 32 {
-                warn!("Genesis address {} has invalid length (expected 32 bytes)", address_str);
+                warn!(
+                    "Genesis address {} has invalid length (expected 32 bytes)",
+                    address_str
+                );
                 continue;
             }
 
@@ -149,16 +158,22 @@ impl Startup {
             // Parse balance from string (vc amount, usually very large)
             // Try decimal first, then hex if it starts with 0x
             let balance = if balance_str.starts_with("0x") || balance_str.starts_with("0X") {
-                U256::from_str_radix(balance_str.trim_start_matches("0x").trim_start_matches("0X"), 16)
-                    .context(format!("Invalid hex balance format: {}", balance_str))?
+                U256::from_str_radix(
+                    balance_str
+                        .trim_start_matches("0x")
+                        .trim_start_matches("0X"),
+                    16,
+                )
+                .context(format!("Invalid hex balance format: {}", balance_str))?
             } else {
                 U256::from_str_radix(balance_str, 10)
                     .context(format!("Invalid decimal balance format: {}", balance_str))?
             };
 
-            state.set_balance(&address, balance)
+            state
+                .set_balance(&address, balance)
                 .context(format!("Failed to set balance for {}", address_str))?;
-            
+
             info!("Genesis allocation: {} -> {} vc", address_str, balance);
         }
 
@@ -344,9 +359,8 @@ impl Startup {
             info!("Validator private key successfully loaded from environment variable.");
         }
         // 2. Fallback to Local Config (Development/Testing only)
-        else if let Some(private_key_hex) = value
-            .get("proposer_private_key")
-            .and_then(|v| v.as_str())
+        else if let Some(private_key_hex) =
+            value.get("proposer_private_key").and_then(|v| v.as_str())
         {
             let decoded = hex::decode(private_key_hex.trim_start_matches("0x"))
                 .context("Invalid proposer_private_key hex")?;
@@ -361,8 +375,13 @@ impl Startup {
         if let Some(alloc_obj) = value.get("alloc").and_then(|v| v.as_object()) {
             for (address, account) in alloc_obj.iter() {
                 if let Some(balance_str) = account.get("balance").and_then(|v| v.as_str()) {
-                    config.genesis_alloc.insert(address.clone(), balance_str.to_string());
-                    info!("Loaded genesis allocation: {} balance={}", address, balance_str);
+                    config
+                        .genesis_alloc
+                        .insert(address.clone(), balance_str.to_string());
+                    info!(
+                        "Loaded genesis allocation: {} balance={}",
+                        address, balance_str
+                    );
                 }
             }
         }

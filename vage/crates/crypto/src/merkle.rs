@@ -1,8 +1,8 @@
-use vage_types::Hash;
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use vage_types::Hash;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct MerkleTree {
@@ -106,8 +106,12 @@ impl MerkleTree {
 
     /// High-performance parallel root computation using Rayon.
     pub fn parallel_root(&self) -> Hash {
-        if self.leaves.is_empty() { return Self::empty_root(); }
-        if self.leaves.len() == 1 { return self.leaves[0]; }
+        if self.leaves.is_empty() {
+            return Self::empty_root();
+        }
+        if self.leaves.len() == 1 {
+            return self.leaves[0];
+        }
 
         let mut current_layer = self.leaves.clone();
         let mut scratch = Vec::new();
@@ -146,7 +150,7 @@ impl MerkleTree {
         // Iterate through layers from bottom up, excluding the root layer
         for i in 0..self.layers.len() - 1 {
             let layer = &self.layers[i];
-            let is_right_node = current_index % 2 == 1;
+            let is_right_node = !current_index.is_multiple_of(2);
             let sibling_index = if is_right_node {
                 current_index - 1
             } else {
@@ -195,7 +199,11 @@ impl MerkleTree {
 
         let expected_depth = self.layers.len().saturating_sub(1);
         if proof.len() != expected_depth {
-            bail!("Invalid proof depth: expected {}, got {}", expected_depth, proof.len());
+            bail!(
+                "Invalid proof depth: expected {}, got {}",
+                expected_depth,
+                proof.len()
+            );
         }
         Ok(())
     }
@@ -226,7 +234,8 @@ impl MerkleTree {
 
     /// Deserialize a tree from bincode bytes.
     pub fn deserialize(bytes: &[u8]) -> Result<Self> {
-        bincode::deserialize(bytes).map_err(|e| anyhow::anyhow!("Merkle tree deserialization failed: {:?}", e))
+        bincode::deserialize(bytes)
+            .map_err(|e| anyhow::anyhow!("Merkle tree deserialization failed: {:?}", e))
     }
 
     fn build_next_layer_into(current_layer: &[Hash], next_layer: &mut Vec<Hash>) {
@@ -234,7 +243,10 @@ impl MerkleTree {
         next_layer.clear();
         next_layer.resize(next_len, [0u8; 32]);
 
-        for (slot, pair_index) in next_layer.iter_mut().zip((0..current_layer.len()).step_by(2)) {
+        for (slot, pair_index) in next_layer
+            .iter_mut()
+            .zip((0..current_layer.len()).step_by(2))
+        {
             let left = &current_layer[pair_index];
             let right = current_layer.get(pair_index + 1).unwrap_or(left);
             Self::hash_pair_into(left, right, slot);
@@ -300,19 +312,34 @@ mod tests {
     fn generate_and_verify_proof_work() {
         let tree = MerkleTree::new(vec![leaf(10), leaf(20), leaf(30), leaf(40), leaf(50)]);
         let index = 3;
-        let proof = tree.generate_proof(index).expect("proof generation should succeed");
+        let proof = tree
+            .generate_proof(index)
+            .expect("proof generation should succeed");
 
         tree.validate_proof_structure(&proof)
             .expect("proof structure should be valid");
-        assert!(MerkleTree::verify_proof(tree.leaves[index], &proof, tree.root(), index));
-        assert!(!MerkleTree::verify_proof(tree.leaves[index], &proof, leaf(0), index));
+        assert!(MerkleTree::verify_proof(
+            tree.leaves[index],
+            &proof,
+            tree.root(),
+            index
+        ));
+        assert!(!MerkleTree::verify_proof(
+            tree.leaves[index],
+            &proof,
+            leaf(0),
+            index
+        ));
     }
 
     #[test]
     fn proof_path_tracks_indices_to_root() {
         let tree = MerkleTree::new(vec![leaf(1), leaf(2), leaf(3), leaf(4), leaf(5)]);
 
-        assert_eq!(tree.proof_path(4).expect("proof path should succeed"), vec![4, 2, 1, 0]);
+        assert_eq!(
+            tree.proof_path(4).expect("proof path should succeed"),
+            vec![4, 2, 1, 0]
+        );
     }
 
     #[test]
@@ -328,7 +355,8 @@ mod tests {
 
     #[test]
     fn batch_build_creates_multiple_trees() {
-        let trees = MerkleTree::batch_build(vec![vec![leaf(1), leaf(2)], vec![leaf(3)], Vec::new()]);
+        let trees =
+            MerkleTree::batch_build(vec![vec![leaf(1), leaf(2)], vec![leaf(3)], Vec::new()]);
 
         assert_eq!(trees.len(), 3);
         assert_eq!(trees[0].leaf_count(), 2);
@@ -338,7 +366,11 @@ mod tests {
 
     #[test]
     fn parallel_roots_match_tree_roots() {
-        let batches = vec![vec![leaf(1), leaf(2), leaf(3)], vec![leaf(4), leaf(5)], Vec::new()];
+        let batches = vec![
+            vec![leaf(1), leaf(2), leaf(3)],
+            vec![leaf(4), leaf(5)],
+            Vec::new(),
+        ];
         let roots = MerkleTree::parallel_roots(&batches);
 
         assert_eq!(roots[0], MerkleTree::new(batches[0].clone()).root());

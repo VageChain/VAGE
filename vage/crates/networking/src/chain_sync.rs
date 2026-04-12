@@ -1,12 +1,12 @@
 use crate::peer::PeerStore;
 use anyhow::{anyhow, bail, Result};
 use libp2p::PeerId;
-use vage_block::Block;
-use vage_types::Hash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, info, warn};
+use vage_block::Block;
+use vage_types::Hash;
 
 // â”€â”€ items 1-2: BlockRequest / BlockResponse messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -18,11 +18,17 @@ pub struct BlockRequest {
 
 impl BlockRequest {
     pub fn single(height: u64) -> Self {
-        Self { start_height: height, end_height: height }
+        Self {
+            start_height: height,
+            end_height: height,
+        }
     }
 
     pub fn range(start_height: u64, end_height: u64) -> Self {
-        Self { start_height, end_height }
+        Self {
+            start_height,
+            end_height,
+        }
     }
 
     pub fn encode(&self) -> Result<Vec<u8>> {
@@ -43,11 +49,19 @@ pub struct BlockResponse {
 
 impl BlockResponse {
     pub fn ok(start_height: u64, blocks: Vec<Vec<u8>>) -> Self {
-        Self { start_height, blocks, error: None }
+        Self {
+            start_height,
+            blocks,
+            error: None,
+        }
     }
 
     pub fn err(start_height: u64, message: impl Into<String>) -> Self {
-        Self { start_height, blocks: Vec::new(), error: Some(message.into()) }
+        Self {
+            start_height,
+            blocks: Vec::new(),
+            error: Some(message.into()),
+        }
     }
 
     pub fn encode(&self) -> Result<Vec<u8>> {
@@ -172,13 +186,11 @@ where
     pub fn query_peers_for_height(&self, peers: &[PeerId]) -> Vec<PeerHeight> {
         peers
             .iter()
-            .filter_map(|&peer_id| {
-                match self.request_latest_height(peer_id) {
-                    Ok(height) => Some(PeerHeight { peer_id, height }),
-                    Err(err) => {
-                        debug!("peer {:?} height query failed: {}", peer_id, err);
-                        None
-                    }
+            .filter_map(|&peer_id| match self.request_latest_height(peer_id) {
+                Ok(height) => Some(PeerHeight { peer_id, height }),
+                Err(err) => {
+                    debug!("peer {:?} height query failed: {}", peer_id, err);
+                    None
                 }
             })
             .collect()
@@ -192,16 +204,17 @@ where
 
     // â”€â”€ item 6: request missing block range â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    pub fn request_block_range(
-        &self,
-        peer_id: PeerId,
-        start: u64,
-        end: u64,
-    ) -> Result<Vec<Block>> {
+    pub fn request_block_range(&self, peer_id: PeerId, start: u64, end: u64) -> Result<Vec<Block>> {
         let req = BlockRequest::range(start, end);
         let response = self.fetcher.fetch_blocks(peer_id, &req)?;
         if let Some(err) = response.error {
-            bail!("peer {:?} returned error for range {}-{}: {}", peer_id, start, end, err);
+            bail!(
+                "peer {:?} returned error for range {}-{}: {}",
+                peer_id,
+                start,
+                end,
+                err
+            );
         }
         let mut blocks = Vec::with_capacity(response.blocks.len());
         for raw in &response.blocks {
@@ -214,12 +227,7 @@ where
 
     // â”€â”€ item 7: receive blocks in batches â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    pub fn fetch_batches(
-        &self,
-        peer_id: PeerId,
-        from: u64,
-        to: u64,
-    ) -> Result<Vec<Vec<Block>>> {
+    pub fn fetch_batches(&self, peer_id: PeerId, from: u64, to: u64) -> Result<Vec<Vec<Block>>> {
         let mut batches = Vec::new();
         let mut cursor = from;
         while cursor <= to {
@@ -307,13 +315,9 @@ where
 
     // â”€â”€ item 15: apply one validated block (full pipeline) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    fn apply_block(
-        &mut self,
-        peer_id: PeerId,
-        block: &Block,
-        prev_hash: Hash,
-    ) -> Result<()> {
-        if let Err(e) = self.validate_block_header_hash(block)
+    fn apply_block(&mut self, peer_id: PeerId, block: &Block, prev_hash: Hash) -> Result<()> {
+        if let Err(e) = self
+            .validate_block_header_hash(block)
             .and_then(|_| self.validate_parent_linkage(prev_hash, block))
             .and_then(|_| self.validate_consensus_signatures(block))
         {
@@ -365,10 +369,7 @@ where
             );
 
             let blocks = self.fetch_all_parallel(best.peer_id, local_height + 1, best.height)?;
-            let mut prev_hash = self
-                .store
-                .block_hash_at(local_height)?
-                .unwrap_or([0u8; 32]);
+            let mut prev_hash = self.store.block_hash_at(local_height)?.unwrap_or([0u8; 32]);
 
             for block in &blocks {
                 match self.apply_block(best.peer_id, block, prev_hash) {
@@ -397,17 +398,16 @@ where
         }
 
         let new_head = self.store.local_height()?;
-        Ok(ChainSyncResult { blocks_applied: total_applied, new_head, banned_peers: banned })
+        Ok(ChainSyncResult {
+            blocks_applied: total_applied,
+            new_head,
+            banned_peers: banned,
+        })
     }
 
     // â”€â”€ item 16: parallel block downloads â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    pub fn fetch_all_parallel(
-        &self,
-        peer_id: PeerId,
-        from: u64,
-        to: u64,
-    ) -> Result<Vec<Block>> {
+    pub fn fetch_all_parallel(&self, peer_id: PeerId, from: u64, to: u64) -> Result<Vec<Block>> {
         // Divide the range into `parallel_downloads` sub-ranges and fetch sequentially
         // with a thread pool emulation (true async parallelism is wired at the caller).
         // Using std threads here keeps this sync-callable without a runtime handle.
@@ -430,9 +430,7 @@ where
             let handles: Vec<_> = ranges
                 .into_iter()
                 .map(|(start, end)| {
-                    scope.spawn(move || {
-                        self.request_block_range_with_retry(peer_id, start, end)
-                    })
+                    scope.spawn(move || self.request_block_range_with_retry(peer_id, start, end))
                 })
                 .collect();
 
@@ -465,7 +463,11 @@ where
                 Err(e) => {
                     debug!(
                         "block range {}-{} attempt {}/{} failed: {}",
-                        start, end, attempt + 1, self.config.max_retries + 1, e
+                        start,
+                        end,
+                        attempt + 1,
+                        self.config.max_retries + 1,
+                        e
                     );
                     last_err = e;
                     std::thread::sleep(self.config.retry_delay);
@@ -478,10 +480,7 @@ where
     // â”€â”€ items 18-19: detect malicious peers / ban peers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     fn penalize_peer(&mut self, peer_id: PeerId, reason: &anyhow::Error) {
-        let score = self
-            .peer_penalties
-            .entry(peer_id)
-            .or_insert(0);
+        let score = self.peer_penalties.entry(peer_id).or_insert(0);
         *score -= self.config.invalid_block_penalty;
         warn!(
             "penalized peer {:?} (session score {}): {}",
@@ -531,10 +530,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use libp2p::{identity::Keypair, PeerId};
+    use std::sync::Mutex;
     use vage_block::{Block, BlockBody, BlockHeader};
     use vage_types::Address;
-    use std::sync::Mutex;
-    use libp2p::{identity::Keypair, PeerId};
 
     fn dummy_peer() -> PeerId {
         PeerId::from(Keypair::generate_ed25519().public())
@@ -560,7 +559,10 @@ mod tests {
 
     impl BlockFetcher for StubFetcher {
         fn fetch_height(&self, peer_id: PeerId) -> Result<u64> {
-            self.heights.get(&peer_id).copied().ok_or_else(|| anyhow!("unknown peer"))
+            self.heights
+                .get(&peer_id)
+                .copied()
+                .ok_or_else(|| anyhow!("unknown peer"))
         }
 
         fn fetch_blocks(&self, _peer_id: PeerId, req: &BlockRequest) -> Result<BlockResponse> {
@@ -569,7 +571,10 @@ mod tests {
                 if let Some(b) = self.blocks.get(&h) {
                     raw.push(bincode::serialize(b).unwrap());
                 } else {
-                    return Ok(BlockResponse::err(req.start_height, format!("missing block at {}", h)));
+                    return Ok(BlockResponse::err(
+                        req.start_height,
+                        format!("missing block at {}", h),
+                    ));
                 }
             }
             Ok(BlockResponse::ok(req.start_height, raw))
@@ -602,12 +607,17 @@ mod tests {
     }
 
     impl ChainStore for StubStore {
-        fn local_height(&self) -> Result<u64> { Ok(*self.head.lock().unwrap()) }
+        fn local_height(&self) -> Result<u64> {
+            Ok(*self.head.lock().unwrap())
+        }
         fn block_hash_at(&self, height: u64) -> Result<Option<Hash>> {
             Ok(self.hashes.lock().unwrap().get(&height).copied())
         }
         fn append_block(&self, block: &Block) -> Result<()> {
-            self.hashes.lock().unwrap().insert(block.height(), block.hash());
+            self.hashes
+                .lock()
+                .unwrap()
+                .insert(block.height(), block.hash());
             Ok(())
         }
         fn update_chain_head(&self, block: &Block) -> Result<()> {
@@ -618,12 +628,18 @@ mod tests {
             *self.progress.lock().unwrap() = height;
             Ok(())
         }
-        fn load_sync_progress(&self) -> Result<u64> { Ok(*self.progress.lock().unwrap()) }
+        fn load_sync_progress(&self) -> Result<u64> {
+            Ok(*self.progress.lock().unwrap())
+        }
     }
 
-    struct StubVerifier { valid: bool }
+    struct StubVerifier {
+        valid: bool,
+    }
     impl ConsensusSignatureVerifier for StubVerifier {
-        fn verify_block_signatures(&self, _block: &Block) -> Result<bool> { Ok(self.valid) }
+        fn verify_block_signatures(&self, _block: &Block) -> Result<bool> {
+            Ok(self.valid)
+        }
     }
 
     fn make_engine(
@@ -634,7 +650,10 @@ mod tests {
         state_root: Hash,
     ) -> ChainSyncEngine<StubFetcher, StubExecutor, StubStore, StubVerifier> {
         ChainSyncEngine::new(
-            StubFetcher { heights: peer_heights, blocks },
+            StubFetcher {
+                heights: peer_heights,
+                blocks,
+            },
             StubExecutor { state_root },
             StubStore::new(head, hashes),
             StubVerifier { valid: true },
@@ -710,11 +729,20 @@ mod tests {
         // StubFetcher with no blocks â€” will always fail, verifying retry count.
         let peer = dummy_peer();
         let engine = ChainSyncEngine::new(
-            StubFetcher { heights: HashMap::from([(peer, 5)]), blocks: HashMap::new() },
-            StubExecutor { state_root: [0u8; 32] },
+            StubFetcher {
+                heights: HashMap::from([(peer, 5)]),
+                blocks: HashMap::new(),
+            },
+            StubExecutor {
+                state_root: [0u8; 32],
+            },
             StubStore::new(0, HashMap::new()),
             StubVerifier { valid: true },
-            ChainSyncConfig { max_retries: 2, retry_delay: Duration::from_millis(1), ..Default::default() },
+            ChainSyncConfig {
+                max_retries: 2,
+                retry_delay: Duration::from_millis(1),
+                ..Default::default()
+            },
         );
         let result = engine.request_block_range_with_retry(peer, 1, 1);
         assert!(result.is_err());
@@ -738,10 +766,7 @@ mod tests {
         let mut engine = ChainSyncEngine::new(
             StubFetcher {
                 heights: HashMap::from([(peer, 2)]),
-                blocks: HashMap::from([
-                    (1, block_1.clone()),
-                    (2, block_2.clone()),
-                ]),
+                blocks: HashMap::from([(1, block_1.clone()), (2, block_2.clone())]),
             },
             StubExecutor { state_root },
             StubStore::new(0, HashMap::from([(0, genesis_hash)])),

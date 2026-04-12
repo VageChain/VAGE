@@ -10,13 +10,13 @@
 ///   5. The block builder picks from the *revealed* set in randomized order,
 ///      preventing gas-price front-running (items 11-12).
 use anyhow::{anyhow, bail, Result};
-use vage_storage::StorageEngine;
-use vage_types::Transaction;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
+use vage_storage::StorageEngine;
+use vage_types::Transaction;
 
 // â”€â”€ storage keys â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -100,8 +100,18 @@ pub struct RevealTransaction {
 }
 
 impl RevealTransaction {
-    pub fn new(commit_id: [u8; 32], transaction: Transaction, reveal_nonce: [u8; 32], revealed_at: u64) -> Self {
-        Self { commit_id, transaction, reveal_nonce, revealed_at }
+    pub fn new(
+        commit_id: [u8; 32],
+        transaction: Transaction,
+        reveal_nonce: [u8; 32],
+        revealed_at: u64,
+    ) -> Self {
+        Self {
+            commit_id,
+            transaction,
+            reveal_nonce,
+            revealed_at,
+        }
     }
 }
 
@@ -200,7 +210,7 @@ impl CommitRevealPool {
     /// Advance the pool's view of the current chain height and evict expired commits.
     pub fn on_new_block(&mut self, height: u64) -> Result<()> {
         self.current_height = height;
-        self.drop_unrevealed_commits()?;  // item 15
+        self.drop_unrevealed_commits()?; // item 15
         Ok(())
     }
 
@@ -221,15 +231,21 @@ impl CommitRevealPool {
         // item 17: anti-front-running â€” reject commits submitted too late
         // (commit must arrive at or before its submitted_at height + 1)
         if commit.submitted_at > self.current_height.saturating_add(1) {
-            bail!("commit submitted_at {} is in the future (current height {})",
-                  commit.submitted_at, self.current_height);
+            bail!(
+                "commit submitted_at {} is in the future (current height {})",
+                commit.submitted_at,
+                self.current_height
+            );
         }
 
         // Spam guard per sender
         let sender_count = self.sender_commit_count.entry(commit.sender).or_insert(0);
         if *sender_count >= self.config.max_commits_per_sender {
-            bail!("sender {:?} exceeded max pending commits ({})",
-                  commit.sender, self.config.max_commits_per_sender);
+            bail!(
+                "sender {:?} exceeded max pending commits ({})",
+                commit.sender,
+                self.config.max_commits_per_sender
+            );
         }
         *sender_count += 1;
 
@@ -246,7 +262,11 @@ impl CommitRevealPool {
         // Recompute commit root (item 18)
         self.recompute_commit_root();
 
-        info!("commit {:?} stored; pool size={}", id, self.pending_commits.len());
+        info!(
+            "commit {:?} stored; pool size={}",
+            id,
+            self.pending_commits.len()
+        );
         Ok(id)
     }
 
@@ -260,11 +280,15 @@ impl CommitRevealPool {
             .ok_or_else(|| anyhow!("no pending commit for id {:?}", reveal.commit_id))?
             .clone();
 
-        let deadline = commit.submitted_at.saturating_add(self.config.reveal_window_blocks);
+        let deadline = commit
+            .submitted_at
+            .saturating_add(self.config.reveal_window_blocks);
         if reveal.revealed_at > deadline {
             bail!(
                 "reveal for commit {:?} arrived at block {} but deadline was {}",
-                reveal.commit_id, reveal.revealed_at, deadline
+                reveal.commit_id,
+                reveal.revealed_at,
+                deadline
             );
         }
 
@@ -276,12 +300,12 @@ impl CommitRevealPool {
 
         // Promote to revealed set
         let key = reveal_storage_key(&reveal.commit_id);
-        let bytes = bincode::serialize(&reveal)
-            .map_err(|e| anyhow!("reveal encode: {}", e))?;
+        let bytes = bincode::serialize(&reveal).map_err(|e| anyhow!("reveal encode: {}", e))?;
         self.storage.state_put(key, bytes)?;
 
         self.revealed_ids.insert(commit.id);
-        self.revealed_txs.push_back((commit.clone(), reveal.transaction));
+        self.revealed_txs
+            .push_back((commit.clone(), reveal.transaction));
 
         // Decrement sender count
         if let Some(count) = self.sender_commit_count.get_mut(&commit.sender) {
@@ -305,7 +329,8 @@ impl CommitRevealPool {
         if expected != commit.commit_hash {
             bail!(
                 "reveal does not match commit: expected {:?}, got {:?}",
-                commit.commit_hash, expected
+                commit.commit_hash,
+                expected
             );
         }
         Ok(())
@@ -321,7 +346,9 @@ impl CommitRevealPool {
     // â”€â”€ item 9: enforce reveal timeout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     pub fn is_reveal_timed_out(&self, commit: &CommitTransaction) -> bool {
-        let deadline = commit.submitted_at.saturating_add(self.config.reveal_window_blocks);
+        let deadline = commit
+            .submitted_at
+            .saturating_add(self.config.reveal_window_blocks);
         self.current_height > deadline
     }
 
@@ -373,7 +400,10 @@ impl CommitRevealPool {
                 if let Some(count) = self.sender_commit_count.get_mut(&commit.sender) {
                     *count = count.saturating_sub(1);
                 }
-                warn!("dropped unrevealed commit {:?} (expired at {})", id, commit.expires_at);
+                warn!(
+                    "dropped unrevealed commit {:?} (expired at {})",
+                    id, commit.expires_at
+                );
                 dropped += 1;
             }
         }
@@ -445,7 +475,8 @@ impl CommitRevealPool {
         if &self.commit_root != block_commit_root {
             bail!(
                 "block commit root {:?} does not match pool commit root {:?}",
-                block_commit_root, self.commit_root
+                block_commit_root,
+                self.commit_root
             );
         }
         Ok(())
@@ -454,13 +485,15 @@ impl CommitRevealPool {
     // â”€â”€ item 20: RPC getters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     pub fn commit_status_rpc(&self, commit_id: &[u8; 32]) -> Option<CommitStatusRpc> {
-        self.pending_commits.get(commit_id).map(|c| CommitStatusRpc {
-            commit_id: hex::encode(c.id),
-            sender: hex::encode(c.sender),
-            submitted_at: c.submitted_at,
-            expires_at: c.expires_at,
-            revealed: self.revealed_ids.contains(&c.id),
-        })
+        self.pending_commits
+            .get(commit_id)
+            .map(|c| CommitStatusRpc {
+                commit_id: hex::encode(c.id),
+                sender: hex::encode(c.sender),
+                submitted_at: c.submitted_at,
+                expires_at: c.expires_at,
+                revealed: self.revealed_ids.contains(&c.id),
+            })
     }
 
     pub fn reveal_status_rpc(&self, commit_id: &[u8; 32]) -> Option<RevealStatusRpc> {
@@ -545,13 +578,13 @@ fn seen_commit_key(id: &[u8; 32]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vage_storage::StorageEngine;
-    use vage_types::{Address, Transaction};
     use primitive_types::U256;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use vage_storage::StorageEngine;
+    use vage_types::{Address, Transaction};
 
     fn unique_db(name: &str) -> (PathBuf, Arc<StorageEngine>) {
         let ts = SystemTime::now()
@@ -573,9 +606,21 @@ mod tests {
         )
     }
 
-    fn make_commit(tx: &Transaction, nonce: [u8; 32], sender: [u8; 32], height: u64, config: &CommitRevealConfig) -> CommitTransaction {
+    fn make_commit(
+        tx: &Transaction,
+        nonce: [u8; 32],
+        sender: [u8; 32],
+        height: u64,
+        config: &CommitRevealConfig,
+    ) -> CommitTransaction {
         let commit_hash = compute_commit_hash(&nonce, tx);
-        CommitTransaction::new(commit_hash, sender, height, config.reveal_window_blocks, config.commit_expiry_blocks)
+        CommitTransaction::new(
+            commit_hash,
+            sender,
+            height,
+            config.reveal_window_blocks,
+            config.commit_expiry_blocks,
+        )
     }
 
     fn default_pool(storage: Arc<StorageEngine>) -> CommitRevealPool {
@@ -587,8 +632,14 @@ mod tests {
         let tx = sample_tx(0);
         let nonce1 = [1u8; 32];
         let nonce2 = [2u8; 32];
-        assert_eq!(compute_commit_hash(&nonce1, &tx), compute_commit_hash(&nonce1, &tx));
-        assert_ne!(compute_commit_hash(&nonce1, &tx), compute_commit_hash(&nonce2, &tx));
+        assert_eq!(
+            compute_commit_hash(&nonce1, &tx),
+            compute_commit_hash(&nonce1, &tx)
+        );
+        assert_ne!(
+            compute_commit_hash(&nonce1, &tx),
+            compute_commit_hash(&nonce2, &tx)
+        );
     }
 
     #[test]
@@ -602,7 +653,8 @@ mod tests {
         let _id = pool.submit_commit(commit).unwrap();
         assert_eq!(pool.pending_commit_count(), 1);
         assert_ne!(pool.current_commit_root(), [0u8; 32]);
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -615,7 +667,8 @@ mod tests {
         let commit = make_commit(&tx, nonce, [1u8; 32], 0, &config);
         pool.submit_commit(commit.clone()).unwrap();
         assert!(pool.submit_commit(commit).is_err());
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -633,7 +686,8 @@ mod tests {
 
         assert_eq!(pool.pending_commit_count(), 0);
         assert_eq!(pool.revealed_tx_count(), 1);
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -649,13 +703,17 @@ mod tests {
 
         let bad_reveal = RevealTransaction::new(id, tx, wrong_nonce, 1);
         assert!(pool.submit_reveal(bad_reveal).is_err());
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
     fn reveal_after_window_rejected() {
         let (path, storage) = unique_db("timeout");
-        let config = CommitRevealConfig { reveal_window_blocks: 3, ..Default::default() };
+        let config = CommitRevealConfig {
+            reveal_window_blocks: 3,
+            ..Default::default()
+        };
         let mut pool = CommitRevealPool::new(config.clone(), storage.clone());
         let tx = sample_tx(5);
         let nonce = [11u8; 32];
@@ -665,7 +723,8 @@ mod tests {
         // Reveal arrives at block 4, deadline was block 3
         let reveal = RevealTransaction::new(id, tx, nonce, 4);
         assert!(pool.submit_reveal(reveal).is_err());
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -686,14 +745,18 @@ mod tests {
         // Advance past expires_at (0 + 2 + 3 = 5)
         pool.on_new_block(6).unwrap();
         assert_eq!(pool.pending_commit_count(), 0);
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
     fn build_block_returns_randomized_revealed_txs() {
         let (path, storage) = unique_db("build");
         let mut pool = CommitRevealPool::new(
-            CommitRevealConfig { ordering_seed: [5u8; 32], ..Default::default() },
+            CommitRevealConfig {
+                ordering_seed: [5u8; 32],
+                ..Default::default()
+            },
             storage.clone(),
         );
         let config = CommitRevealConfig::default();
@@ -709,7 +772,8 @@ mod tests {
 
         let txs = pool.build_block_transactions(10);
         assert_eq!(txs.len(), 5);
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -729,7 +793,8 @@ mod tests {
         pool.submit_reveal(reveal).unwrap();
 
         assert!(pool.reveal_status_rpc(&id).is_some());
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -741,14 +806,25 @@ mod tests {
         let nonce = [33u8; 32];
         let commit_hash = compute_commit_hash(&nonce, &tx);
         // Sender A submits first
-        let commit_a = CommitTransaction::new(commit_hash, [1u8; 32], 0,
-            config.reveal_window_blocks, config.commit_expiry_blocks);
+        let commit_a = CommitTransaction::new(
+            commit_hash,
+            [1u8; 32],
+            0,
+            config.reveal_window_blocks,
+            config.commit_expiry_blocks,
+        );
         pool.submit_commit(commit_a).unwrap();
 
         // Sender B tries to front-run with the same commit_hash at the same height
-        let commit_b = CommitTransaction::new(commit_hash, [2u8; 32], 0,
-            config.reveal_window_blocks, config.commit_expiry_blocks);
+        let commit_b = CommitTransaction::new(
+            commit_hash,
+            [2u8; 32],
+            0,
+            config.reveal_window_blocks,
+            config.commit_expiry_blocks,
+        );
         assert!(pool.detect_front_running(&commit_b));
-        drop(storage); let _ = fs::remove_file(&path);
+        drop(storage);
+        let _ = fs::remove_file(&path);
     }
 }

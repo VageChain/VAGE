@@ -129,7 +129,11 @@ mod tests {
     fn peer_id(seed: u8) -> PeerId {
         let mut bytes = [seed; 32];
         bytes[0] = bytes[0].max(1);
-        PeerId::from(Keypair::ed25519_from_bytes(bytes).expect("keypair should build").public())
+        PeerId::from(
+            Keypair::ed25519_from_bytes(bytes)
+                .expect("keypair should build")
+                .public(),
+        )
     }
 
     fn address(port: u16) -> Multiaddr {
@@ -178,19 +182,30 @@ mod tests {
         store.add_peer(first_peer.clone());
         store.add_peer(second_peer.clone());
 
-        assert_eq!(store.get_peer(&first_id).map(|peer| peer.address.as_str()), Some("/ip4/127.0.0.1/tcp/9002"));
+        assert_eq!(
+            store.get_peer(&first_id).map(|peer| peer.address.as_str()),
+            Some("/ip4/127.0.0.1/tcp/9002")
+        );
         assert_eq!(store.connected_peers().len(), 2);
 
         assert!(store.ban_peer(&first_id));
-        assert!(store.get_peer(&first_id).expect("peer should exist").is_banned());
+        assert!(store
+            .get_peer(&first_id)
+            .expect("peer should exist")
+            .is_banned());
         assert_eq!(store.connected_peers().len(), 1);
         assert_eq!(store.connected_peers()[0].peer_id, second_id);
 
         assert!(store.unban_peer(&first_id));
-        assert!(!store.get_peer(&first_id).expect("peer should exist").is_banned());
+        assert!(!store
+            .get_peer(&first_id)
+            .expect("peer should exist")
+            .is_banned());
         assert_eq!(store.connected_peers().len(), 2);
 
-        let removed = store.remove_peer(&second_id).expect("peer should be removed");
+        let removed = store
+            .remove_peer(&second_id)
+            .expect("peer should be removed");
         assert_eq!(removed.peer_id, second_id);
         assert!(store.get_peer(&second_id).is_none());
         assert_eq!(store.connected_peers().len(), 1);

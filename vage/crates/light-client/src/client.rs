@@ -1,19 +1,19 @@
 use anyhow::Result;
+use libp2p::PeerId;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
+use tracing::{info, warn};
 use vage_block::BlockHeader;
 use vage_networking::{
     P2PNetwork, RpcStateProofQuery, RpcStateProofRequest, RpcStateProofValue, RpcSyncClient,
     RpcVerifiedHeaderEnvelope,
 };
 use vage_types::{Account, Address, BlockHeight, Hash, Validator};
-use tracing::{info, warn};
-use libp2p::PeerId;
-use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
 
 use crate::header_sync::HeaderSync;
 use crate::proofs::ProofVerifier;
 
-/// A lightweight client for the VageChain blockchain that verifies block headers 
+/// A lightweight client for the VageChain blockchain that verifies block headers
 /// and maintains a trusted view of the chain without storing the full state.
 pub struct LightClient {
     /// The most recent header that has been cryptographically verified.
@@ -44,14 +44,21 @@ impl LightClient {
         trusted_header: BlockHeader,
         validator_set: Vec<Validator>,
     ) -> Self {
-        info!("Initializing VageChain light client... Primary peer: {}, Trusted Checkpoint: {}", peer, trusted_header.height);
-        
+        info!(
+            "Initializing VageChain light client... Primary peer: {}, Trusted Checkpoint: {}",
+            peer, trusted_header.height
+        );
+
         Self {
             latest_header: Arc::new(RwLock::new(None)),
             networking,
             peer: Arc::new(RwLock::new(peer)),
             trusted_checkpoint: Some(trusted_header.height),
-            sync_engine: Arc::new(RwLock::new(HeaderSync::new_with_validator_set(peer, trusted_header, validator_set))),
+            sync_engine: Arc::new(RwLock::new(HeaderSync::new_with_validator_set(
+                peer,
+                trusted_header,
+                validator_set,
+            ))),
         }
     }
 
@@ -95,12 +102,18 @@ impl LightClient {
         let (current_height, _) = self.get_chain_tip().await;
 
         if target_height <= current_height {
-            info!("Light client is already at the network tip (height={})", current_height);
+            info!(
+                "Light client is already at the network tip (height={})",
+                current_height
+            );
             return Ok(());
         }
 
         // LC Step 1b â€” download missing headers with validator-signature bundles.
-        info!("Sync gap detected: local={}, network={}. Fetching verified header range...", current_height, target_height);
+        info!(
+            "Sync gap detected: local={}, network={}. Fetching verified header range...",
+            current_height, target_height
+        );
         let headers = {
             let mut network = self.networking.lock().await;
             network
@@ -124,7 +137,11 @@ impl LightClient {
         if let Some(header) = sync_guard.latest_verified_header() {
             let mut header_guard = self.latest_header.write().await;
             *header_guard = Some(header.clone());
-            info!("Trusted state updated to height {}: Hash={}", header.height, hex::encode(header.hash()));
+            info!(
+                "Trusted state updated to height {}: Hash={}",
+                header.height,
+                hex::encode(header.hash())
+            );
         }
 
         Ok(())
@@ -211,15 +228,16 @@ impl LightClient {
         let peer = *self.peer.read().await;
         let response = {
             let mut network = self.networking.lock().await;
-            network.request_state_proof(
-                peer,
-                RpcStateProofRequest {
-                    height,
-                    max_depth,
-                    query: RpcStateProofQuery::Account { address },
-                },
-            )
-            .await?
+            network
+                .request_state_proof(
+                    peer,
+                    RpcStateProofRequest {
+                        height,
+                        max_depth,
+                        query: RpcStateProofQuery::Account { address },
+                    },
+                )
+                .await?
         }
         .ok_or_else(|| anyhow::anyhow!("peer did not return an account state proof"))?;
 
@@ -242,7 +260,10 @@ impl LightClient {
         };
 
         if !ProofVerifier::verify_rpc_account_proof(&response.proof, &address, &account)? {
-            anyhow::bail!("account state proof verification failed at height {}", height);
+            anyhow::bail!(
+                "account state proof verification failed at height {}",
+                height
+            );
         }
 
         Ok((account, response.proof))
@@ -270,13 +291,20 @@ impl LightClient {
             warn!("Light client state is uninitialized at height {}", height);
             return Ok(false);
         }
-        
+
         info!("Light client state integrity verified at height {}", height);
         Ok(true)
     }
 
     async fn verified_header_at_height(&self, height: BlockHeight) -> Option<BlockHeader> {
-        if self.latest_header.read().await.as_ref().map(|header| header.height) == Some(height) {
+        if self
+            .latest_header
+            .read()
+            .await
+            .as_ref()
+            .map(|header| header.height)
+            == Some(height)
+        {
             return self.latest_header.read().await.clone();
         }
 
@@ -296,17 +324,17 @@ mod tests {
     use ed25519_dalek::{Signer, SigningKey};
     use libp2p::{identity::Keypair, Multiaddr, PeerId};
     use primitive_types::U256;
+    use sha2::{Digest, Sha256};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::Mutex;
     use vage_block::{BlockBody, BlockHeader};
     use vage_networking::{
         L1Response, P2PConfig, P2PNetwork, RpcStateProofResponse, RpcStateProofValue,
         RpcVerifiedHeaderEnvelope,
     };
     use vage_state::{VerkleProof, VerkleTree};
-    use vage_types::{Account, Address, Validator, validator::ValidatorStatus};
-    use sha2::{Digest, Sha256};
-    use std::sync::Arc;
-    use std::time::Duration;
-    use tokio::sync::Mutex;
+    use vage_types::{validator::ValidatorStatus, Account, Address, Validator};
 
     fn test_config() -> P2PConfig {
         P2PConfig {
@@ -436,11 +464,13 @@ mod tests {
             .add_peer(vage_networking::Peer::new(peer_id, tcp_addr(22001)));
         network.queue_mock_rpc_response(L1Response::respond_latest_block_height(Some(1)));
         network.queue_mock_rpc_response(L1Response::respond_headers(Some(vec![envelope])));
-        network.queue_mock_rpc_response(L1Response::respond_state_proof(Some(RpcStateProofResponse {
+        network.queue_mock_rpc_response(L1Response::respond_state_proof(Some(
+            RpcStateProofResponse {
                 height: 1,
                 proof: rpc_account_proof,
                 value: RpcStateProofValue::Account(account.clone()),
-            })));
+            },
+        )));
 
         let client = LightClient::new_with_validator_set(
             Arc::new(Mutex::new(network)),
