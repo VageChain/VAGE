@@ -1,0 +1,65 @@
+# Code ownership and responsibility assignments
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Root files and overall project
+* @your-github-handle
+
+# Build and release
+/.github/ @your-github-handle
+/vage/Cargo.toml @your-github-handle
+/vage/Cargo.lock @your-github-handle
+rust-toolchain.toml @your-github-handle
+devnet_start.sh @your-github-handle
+devnet_start.ps1 @your-github-handle
+
+# Documentation
+/docs/ @your-github-handle
+README.md @your-github-handle
+/vage/LICENSE @your-github-handle
+
+# Core consensus implementation
+/vage/crates/consensus/ @your-github-handle
+
+# Execution and state
+/vage/crates/execution/ @your-github-handle
+/vage/crates/state/ @your-github-handle
+/vage/crates/storage/ @your-github-handle
+
+# Cryptography and security
+/vage/crates/crypto/ @your-github-handle
+
+# Networking
+/vage/crates/networking/ @your-github-handle
+/vage/crates/mempool/ @your-github-handle
+
+# RPC and APIs
+/vage/crates/rpc/ @your-github-handle
+
+# Zero-knowledge proofs
+/vage/crates/zk/ @your-github-handle
+
+# Node implementation
+/vage/bin/node/ @your-github-handle
+/vage/crates/node/ @your-github-handle
+
+# CLI tools
+/vage/bin/cli/ @your-github-handle
+
+# Network configuration and validators
+/vage/network/ @your-github-handle
+/vage/validators/ @your-github-handle
+
+# Configuration files
+/vage/configs/ @your-github-handle
+
+# Tests
+/vage/tests/ @your-github-handle
+
+# Monitoring
+/monitoring/ @your-github-handle
+
+# Docker
+/vage/docker/ @your-github-handle
+
+# Scripts
+/scripts/ @your-github-handle

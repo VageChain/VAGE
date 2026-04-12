@@ -1,0 +1,76 @@
+# This is a configuration file for cargo-deny.
+# See https://embarkstudios.github.io/cargo-deny/index.html
+
+[advisories]
+# The path where the vulnerability database is cloned/fetched into
+db-path = "$CARGO_HOME/cargo-deny-db"
+# The url(s) of the advisory databases to use
+db-urls = ["https://github.com/rustsec/advisory-db/raw/main/db.toml"]
+# How to handle crates with security vulnerabilities
+vulnerability = "deny"
+# How to handle unmaintained crates
+unmaintained = "warn"
+# The lint level for crates which do not have a detectable license
+notice = "warn"
+# A list of advisory IDs to ignore. Note that ignored advisories will still
+# output a note when they are encountered.
+ignore = [
+    #"RUSTSEC-2020-0001",
+]
+
+[licenses]
+# The lint level used when no other predicates are matched
+unlicensed = "warn"
+# List of explicitly allowed licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 OR MIT",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "Unlicense",
+    "MPL-2.0",
+]
+# List of explicitly disallowed licenses
+deny = [
+    "GPL-2.0",
+    "GPL-3.0",
+    "AGPL-3.0",
+]
+# The confidence threshold for detecting a license from license text.
+copyleft = "warn"
+
+[bans]
+# Lint level for when multiple versions of the same crate are detected
+multiple-versions = "warn"
+# Lint level used when a crate marked as 'deprecated' is detected
+deprecated = "warn"
+# Lint level used when a crate marked as 'unmaintained' is detected
+unmaintained = "warn"
+# The graph highlighting used when creating dotgraphs
+highlight = "lowest-version"
+# List of explicitly disallowed duplicate crates
+deny = [
+    # Each entry the name of the crate being duplicated
+    #{ name = "ansi_term" },
+]
+# Certain crates/versions that will be skipped when doing duplicate detection.
+skip = [
+    #{ name = "ansi_term", version = "=0.11.0" },
+]
+# Similarly named crates that are allowed to coexist
+allow = [
+    { name = "syn", version = "=1.0" },
+    { name = "syn", version = "=2.0" },
+]
+
+[sources]
+# Lint level for what to happen when a crate from a crate registry that is not in the allow list is detected
+unknown-registry = "warn"
+# Lint level for what to happen when a crate from a git repository that is not in the allow list is detected
+unknown-git = "warn"
+# The list of allowed crate registries, [crates.io] is implicit
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# The list of allowed Git repositories
+allow-git = []

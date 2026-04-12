@@ -1,22 +1,258 @@
-name: Rust
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
+    tags:
+      - 'v*'
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  RUSTFLAGS: "-D warnings"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-
+  # Quick format and clippy checks
+  lint:
+    name: Lint (fmt + clippy)
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cd vage cargo build --verbose
-    - name: Run tests
-      run: cd vage cargo test --verbose
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: vage/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Check formatting
+        run: cd vage && cargo fmt --all -- --check
+      
+      - name: Run clippy
+        run: cd vage && cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  # Build all workspace members
+  build:
+    name: Build (${{ matrix.rust }} - ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable, beta]
+        exclude:
+          # Only test beta on Linux to save CI time
+          - os: macos-latest
+            rust: beta
+          - os: windows-latest
+            rust: beta
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust (${{ matrix.rust }})
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: vage/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build (debug)
+        run: cd vage && cargo build --verbose
+      
+      - name: Build (release)
+        run: cd vage && cargo build --release --verbose
+
+  # Comprehensive test suite
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: vage/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Run unit tests
+        run: cd vage && cargo test --lib --verbose
+      
+      - name: Run integration tests
+        run: cd vage && cargo test --test '*' --verbose
+      
+      - name: Run doc tests
+        run: cd vage && cargo test --doc --verbose
+      
+      - name: Run all tests (all features)
+        run: cd vage && cargo test --all-features --verbose
+
+  # Test across different feature combinations
+  test-features:
+    name: Test Features
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: vage/target
+          key: ${{ runner.os }}-cargo-build-target-feature-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Test each feature combination
+        run: cd vage && cargo hack test --feature-powerset --depth 2
+
+  # MIRI undefined behavior detection
+  miri:
+    name: MIRI (UB Detection)
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust + MIRI
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-miri-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-miri-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Run MIRI
+        run: cd vage && cargo miri test --lib
+        continue-on-error: true
+
+  # Unused dependencies check
+  unused-deps:
+    name: Unused Dependencies
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust (nightly)
+        uses: dtolnay/rust-toolchain@nightly
+      
+      - name: Install cargo-udeps
+        run: cargo install cargo-udeps --locked
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Check unused dependencies
+        run: cd vage && cargo +nightly udeps --all-targets
+        continue-on-error: true
+
+  # Summary job
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [lint, build, test, test-features]
+    if: always()
+    
+    steps:
+      - name: Check jobs status
+        if: ${{ needs.lint.result == 'failure' || needs.build.result == 'failure' || needs.test.result == 'failure' || needs.test-features.result == 'failure' }}
+        run: exit 1
+      
+      - name: CI Pipeline Passed
+        run: echo "✅ All CI checks passed!"

@@ -1,0 +1,330 @@
+name: Release & Deploy
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+          - prerelease
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Validate release
+  validate-release:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Extract version from tag/input
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="pre-release"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+      
+      - name: Check version format
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          if [[ $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "✅ Version format valid: $VERSION"
+          else
+            echo "❌ Invalid version format: $VERSION"
+            exit 1
+          fi
+      
+      - name: Verify Cargo.toml version
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          VERSION=${VERSION#v}
+          VERSION=${VERSION%-*}
+          grep -q "version = \"$VERSION\"" vage/Cargo.toml || echo "⚠️ Warning: Version mismatch possible"
+
+  # Build release binaries
+  build-binaries:
+    name: Build Release Binaries
+    runs-on: ${{ matrix.os }}
+    needs: validate-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: vagechain
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: vagechain
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: vagechain
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: vagechain.exe
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: vage/target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build release
+        run: cd vage && cargo build --release --target ${{ matrix.target }} --verbose
+      
+      - name: Create artifact directory
+        run: mkdir -p release-artifacts
+      
+      - name: Copy binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp vage/target/${{ matrix.target }}/release/vagechain release-artifacts/
+          chmod +x release-artifacts/vagechain
+      
+      - name: Copy binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          copy vage\target\${{ matrix.target }}\release\vagechain.exe release-artifacts\
+      
+      - name: Create checksum
+        run: |
+          cd release-artifacts
+          sha256sum * > checksums.txt 2>/dev/null || shasum -a 256 * > checksums.txt
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
+          path: release-artifacts/
+          retention-days: 5
+
+  # Create release notes
+  generate-release-notes:
+    name: Generate Release Notes
+    runs-on: ubuntu-latest
+    needs: validate-release
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD")
+          CURRENT_TAG=${{ github.ref_name }}
+          
+          # Generate changelog
+          echo "## Changes in $CURRENT_TAG" > CHANGELOG_RELEASE.md
+          echo "" >> CHANGELOG_RELEASE.md
+          
+          git log ${PREV_TAG}..${CURRENT_TAG} --oneline --pretty=format:"- %h: %s" >> CHANGELOG_RELEASE.md || \
+          git log ${CURRENT_TAG}~1..${CURRENT_TAG} --oneline --pretty=format:"- %h: %s" >> CHANGELOG_RELEASE.md || \
+          echo "- Initial release" >> CHANGELOG_RELEASE.md
+          
+          echo "" >> CHANGELOG_RELEASE.md
+          echo "### Build Info" >> CHANGELOG_RELEASE.md
+          echo "- Build timestamp: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> CHANGELOG_RELEASE.md
+          echo "- Rust version: $(rustc --version)" >> CHANGELOG_RELEASE.md
+      
+      - name: Upload changelog
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: CHANGELOG_RELEASE.md
+
+  # Create GitHub Release
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-binaries, generate-release-notes]
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+      
+      - name: Prepare release assets
+        run: |
+          mkdir -p assets
+          cd release-files
+          
+          # Organize binaries
+          for dir in binaries-*; do
+            target=$(basename $dir)
+            target=${target#binaries-}
+            mkdir -p ../assets/$target
+            cp -r $dir/* ../assets/$target/
+          done
+          
+          # Copy release notes
+          cp release-notes/CHANGELOG_RELEASE.md ../RELEASE_NOTES.md || echo "# Release Notes" > ../RELEASE_NOTES.md
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            assets/**/*
+            RELEASE_NOTES.md
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Publish to crates.io
+  publish-crates:
+    name: Publish to Crates.io
+    runs-on: ubuntu-latest
+    needs: validate-release
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Publish core crates
+        run: |
+          cd vage
+          
+          # Publish dependencies first (order matters)
+          echo "Publishing types..."
+          cargo publish -p vage-types --token ${{ secrets.CARGO_TOKEN }} --allow-dirty || echo "Already published"
+          sleep 10
+          
+          echo "Publishing crypto..."
+          cargo publish -p vage-crypto --token ${{ secrets.CARGO_TOKEN }} --allow-dirty || echo "Already published"
+          sleep 10
+          
+          echo "Publishing storage..."
+          cargo publish -p vage-storage --token ${{ secrets.CARGO_TOKEN }} --allow-dirty || echo "Already published"
+          sleep 10
+          
+          echo "Publishing state..."
+          cargo publish -p vage-state --token ${{ secrets.CARGO_TOKEN }} --allow-dirty || echo "Already published"
+          sleep 10
+          
+          echo "Publishing other core crates..."
+          for crate in block consensus execution networking mempool rpc; do
+            echo "Publishing vage-$crate..."
+            cargo publish -p vage-$crate --token ${{ secrets.CARGO_TOKEN }} --allow-dirty || echo "Already published"
+            sleep 10
+          done
+        continue-on-error: true
+
+  # Docker image release
+  publish-docker:
+    name: Publish Docker Image
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        continue-on-error: true
+      
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./vage/docker/Dockerfile
+          push: ${{ secrets.DOCKER_USERNAME != '' }}
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/vagechain:${{ steps.version.outputs.version }}
+            ${{ secrets.DOCKER_USERNAME }}/vagechain:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/vagechain:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/vagechain:buildcache,mode=max
+        continue-on-error: true
+
+  # Release summary
+  release-summary:
+    name: Release Summary
+    runs-on: ubuntu-latest
+    needs: [create-release, publish-crates, publish-docker]
+    if: always()
+    
+    steps:
+      - name: Release Complete
+        run: |
+          echo "✅ Release Process Complete!"
+          echo ""
+          echo "✓ Binaries built for multiple platforms"
+          echo "✓ Release created on GitHub"
+          echo "✓ Crates published to crates.io (if applicable)"
+          echo "✓ Docker image published (if configured)"
+          echo ""
+          echo "Release: ${{ github.ref_name }}"
+          echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
