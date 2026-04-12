@@ -5,13 +5,13 @@ VageChain is a high-performance, next-generation Layer 1 blockchain designed to 
 
 ---
 
-## 🚨 1. Executive Summary & Why VageChain Exists
+##  1. Executive Summary & Why VageChain Exists
 
 Today’s blockchains have a hidden tax: **MEV (Maximal Extractable Value)**. Every day, users lose millions to sandwich attacks, frontrunning bots, and arbitrage exploitation. Even the most advanced chains treat this as “normal.” **VageChain does not.**
 
 VageChain represents a paradigm shift in execution-driven Layer 1 networks. Current monolithic and modular architectures (e.g., Ethereum, Celestia, Solana) compromise on one edge of the scalability trilemma. VageChain bypasses traditional EVM bottlenecks by unifying parallel execution, commit-reveal mempool states, and advanced cryptographic accumulators into a cohesive state machine.
 
-### 🔥 Why This Matters
+###  Why This Matters
 
 For years, the bold promise of decentralized finance has been compromised by an ugly truth: **the system is rigged against the average user.** Every single day, everyday people trying to trade, invest, or just participate in Web3 are silently robbed. They submit a trade, and within milliseconds, a predatory bot spots their transaction in the dark forest of the public mempool, frontruns them, and maliciously siphons their hard-earned value.
 
@@ -27,7 +27,7 @@ We got tired of waiting for external patches. We got tired of accepting the excu
 
 ---
 
-## ⚡ 2. In-Depth Architecture
+##  2. In-Depth Architecture
 
 The VageChain architecture is functionally decoupled but horizontally integrated:
 - **P2P Gossip Layer:** Optimized for rapid mempool propagation and BFT voting messages.
@@ -67,7 +67,7 @@ The VageChain architecture is functionally decoupled but horizontally integrated
               +-----------+  +-----------+
 
 
-### 🛡️ Native MEV Protection: Commit-Reveal Cryptography
+###  Native MEV Protection: Commit-Reveal Cryptography
 
 Maximal Extractable Value (MEV) represents billions of dollars drained continuously by sophisticated searchers and builders operating on probabilistic mempools. VageChain neutralizes toxic MEV at the protocol level through a strict bipartite transaction lifecycle:
 
@@ -76,30 +76,30 @@ Maximal Extractable Value (MEV) represents billions of dollars drained continuou
 
 **Information Asymmetry Elimination:** Because the transaction ordering happens strictly *before* the transaction contents are revealed, searchers have zero data to calculate arbitrage. 👉 **No visibility = No frontrunning.**
 
-### ⚡ Parallel EVM Execution
+###  Parallel EVM Execution
 
 VageChain solves the sequential bottleneck of standard EVMs with an advanced **Parallel EVM** engine using Optimistic Concurrency Control (OCC).
 - **Dynamic Dependency Analysis:** Transactions within a newly ordered block execute optimistically in parallel threads. As transactions execute, the engine records their state reads and writes. If a conflict occurs, transactions are aborted, re-scheduled, and executed sequentially. 
 - **Solidity Compatibility:** Developers do not need to learn a new parallel-centric language. Regular Solidity bytecodes execute normally. 👉 **Deploy without changing your code.**
 
-### ⏱️ Consensus Engine: HotStuff BFT
+###  Consensus Engine: HotStuff BFT
 
 VageChain leverages a pipelined variant of **HotStuff BFT**, a leader-based Byzantine Fault Tolerant protocol providing robust safety and liveness under partial synchrony.
 - **Sub-Second Finality:** Blocks are confirmed deterministically and immediately. There is no probabilistic rollback (unlike Nakamoto Consensus); a finalized block is absolute.
 - **Phase Pipelining:** Every proposal inherently carries the votes for the previous phases, ensuring optimal message complexity and blistering speeds.
 
-### 🌳 Verkle Tree State Cryptography
+###  Verkle Tree State Cryptography
 
 VageChain abandons the MPT (Merkle Patricia Trie) standard in favor of **Verkle Trees** to achieve logarithmic storage and significantly succinct cryptographical proofs.
 - **Polynomial Commitments:** VageChain utilizes Inner Product Arguments (IPA) or KZG polynomial commitments. A proof covering hundreds of state accesses across multiple branches collapses into a single mathematical evaluation.
 - **Statelessness:** Witness proofs become so small (~2-3 KB for a large complex block) that validators can deterministically verify state transitions almost entirely mathematically.
 
-### 🔐 ZK-Ready Infrastructure
+###  ZK-Ready Infrastructure
 VageChain's state transition function (STF) and Verkle state updates are architected to be representable within arithmetized circuits. Integrations utilizing Succinct Non-interactive Arguments of Knowledge (SNARKs/STARKs) like SP1 or Groth16 allow the STF to generate validity proofs natively.
 
 ---
 
-## 📊 3. Competitive Landscape Matrix
+##  3. Competitive Landscape Matrix
 
 | Feature | VageChain | Ethereum | Solana | Aptos/Sui |
 | :--- | :--- | :--- | :--- | :--- |
@@ -113,7 +113,7 @@ VageChain's state transition function (STF) and Verkle state updates are archite
 
 ---
 
-## 📈 4. Performance & Benchmark Targets
+##  4. Performance & Benchmark Targets
 
 VageChain is engineered for high-throughput, low-latency execution. Below are our target metrics under stress-test conditions:
 
@@ -130,7 +130,7 @@ VageChain is engineered for high-throughput, low-latency execution. Below are ou
 
 ---
 
-## ⛽ 5. VageChain Gas Model
+##  5. VageChain Gas Model
 
 This schedule defines the baseline computations for the execution layer:
 - `INTRINSIC_GAS = 210`
@@ -143,7 +143,7 @@ This schedule defines the baseline computations for the execution layer:
 
 ---
 
-## 🚀 6. Getting Started: Developer Guide & DevNet
+##  6. Getting Started: Developer Guide & DevNet
 
 ### Prerequisites
 - ✅ **Rust** (for blockchain & backend)
@@ -171,7 +171,7 @@ cargo run --release -- --config configs/devnet.json
 
 ---
 
-## 🦊 7. RPC API & MetaMask Configuration
+##  7. RPC API & MetaMask Configuration
 
 VageChain is built to completely abstract its underlying computational complexity from the developers, presenting an identical interface to traditional EVM environments. Behind the scenes, the RPC node intrinsically wraps payloads in the Commit-Reveal MEV protections.
 
@@ -190,7 +190,7 @@ You can view the pre-funded DEVNET validators and test accounts dynamically via 
 ```
 **Output:**
 ```text
-📋 DEVNET PRE-FUNDED ACCOUNTS
+ DEVNET PRE-FUNDED ACCOUNTS
 ═══════════════════════════════════════════════════════════
 
 Validator #1
@@ -209,7 +209,7 @@ Balance:     1000000000000000000000000000 vc (1000000000.000000 tokens)
 
 ---
 
-## 💻 8. CLI & Account Management Guide
+##  8. CLI & Account Management Guide
 
 The VageChain CLI provides extensive commands for managing accounts and states.
 
@@ -228,7 +228,7 @@ curl -X POST http://127.0.0.1:8080/rpc \
 
 ---
 
-## 🌐 9. Block Explorer & Analytics Dashboard
+##  9. Block Explorer & Analytics Dashboard
 
 VageChain includes a built-in block explorer that provides a real-time visualization of the network's health, throughput, and state transitions.
 
@@ -245,7 +245,7 @@ The explorer features a high-performance indexer that crawls the local RPC and p
 
 ---
 
-## 🟢 10. Launch Gates & Readiness Status
+##  10. Launch Gates & Readiness Status
 
 The workspace builds successfully, and the test suite passes. The DevNet is fully suitable for local evaluation, CLI testing, RPC integrations, and protocol development. 
 
@@ -264,7 +264,7 @@ The workspace builds successfully, and the test suite passes. The DevNet is full
 
 ---
 
-## 🌍 11. Vision & Contributing
+##  11. Vision & Contributing
 
 We believe the future of blockchain is **Fair**, **Fast**, and **Invisible**. VageChain is not just another L1. It is a new execution standard.
 
@@ -273,7 +273,7 @@ We welcome developers, researchers, and builders:
 - Submit PRs
 - Share ideas
 
-## 📞 12. Contact & Community
+##  12. Contact & Community
 
 Have questions, want to partner with us, or looking to build on VageChain? Reach out through our official channels:
 
@@ -282,7 +282,7 @@ Have questions, want to partner with us, or looking to build on VageChain? Reach
 - **Discord**: [Join the VageChain Community](https://discord.gg/3tX6kWTzEs)
 - **GitHub**: [github.com/vagechain](https://github.com/VageChain)
 
-## 👤 13. Core Developers & Authors
+##  13. Core Developers & Authors
 
 VageChain was created and is actively maintained by a dedicated group of systems engineers, cryptographers, and blockchain researchers who are passionate about scaling the decentralized web honestly.
 
@@ -291,7 +291,7 @@ VageChain was created and is actively maintained by a dedicated group of systems
 
 *I am incredibly grateful to every open-source contributor who has submitted PRs, reported issues, or helped shape the architecture of VageChain.*
 
-## 🚀 14. Flexibility & Future Horizons
+##  14. Flexibility & Future Horizons
 
 VageChain isn't just a static protocol; it is an evolving ecosystem designed for maximum adaptability and long-term utility.
 
