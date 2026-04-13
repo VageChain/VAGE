@@ -277,7 +277,6 @@ We welcome developers, researchers, and builders:
 
 Have questions, want to partner with us, or looking to build on VageChain? Reach out through our official channels:
 
-- **Email**: [hello@vagechain.org](mailto:hello@vagechain.org)
 - **Twitter/X**: [@VageChain](https://x.com/VageChain)
 - **Discord**: [Join the VageChain Community](https://discord.gg/3tX6kWTzEs)
 - **GitHub**: [github.com/vagechain](https://github.com/VageChain)
