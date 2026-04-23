@@ -668,7 +668,10 @@ impl Consensus {
     }
 
     fn maybe_rotate_validator_set_for_new_epoch(&mut self) -> Result<()> {
-        if self.finalized_block_height == 0 || !self.finalized_block_height.is_multiple_of(self.epoch_length)
+        if self.finalized_block_height == 0
+            || !self
+                .finalized_block_height
+                .is_multiple_of(self.epoch_length)
         {
             return Ok(());
         }

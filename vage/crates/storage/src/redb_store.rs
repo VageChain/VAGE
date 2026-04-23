@@ -639,10 +639,7 @@ impl StorageEngine {
         self.atomic_state_commit_with_rollback(changes).map(|_| ())
     }
 
-    pub fn atomic_state_commit_with_rollback(
-        &self,
-        changes: StateUpdates,
-    ) -> Result<StateUpdates> {
+    pub fn atomic_state_commit_with_rollback(&self, changes: StateUpdates) -> Result<StateUpdates> {
         let tx = self.begin_write()?;
         let mut rollback_changes = Vec::with_capacity(changes.len());
         {

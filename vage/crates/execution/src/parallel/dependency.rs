@@ -173,27 +173,15 @@ impl DependencyGraph {
 
         for overlap in &self.overlaps {
             let (from, to) = (overlap.tx_a, overlap.tx_b);
-            self.edges
-                .entry(from)
-                .or_default()
-                .insert(to);
-            self.predecessors
-                .entry(to)
-                .or_default()
-                .insert(from);
+            self.edges.entry(from).or_default().insert(to);
+            self.predecessors.entry(to).or_default().insert(from);
         }
     }
 
     /// Adds a single directed edge `from  to` (to depends on from).
     pub fn add_edge(&mut self, from: usize, to: usize) {
-        self.edges
-            .entry(from)
-            .or_default()
-            .insert(to);
-        self.predecessors
-            .entry(to)
-            .or_default()
-            .insert(from);
+        self.edges.entry(from).or_default().insert(to);
+        self.predecessors.entry(to).or_default().insert(from);
     }
 
     pub fn edge_count(&self) -> usize {
