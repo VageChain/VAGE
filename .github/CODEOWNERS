@@ -2,64 +2,64 @@
 # See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Root files and overall project
-* @your-github-handle
+* @PrafulVRaj
 
 # Build and release
-/.github/ @your-github-handle
-/vage/Cargo.toml @your-github-handle
-/vage/Cargo.lock @your-github-handle
-rust-toolchain.toml @your-github-handle
-devnet_start.sh @your-github-handle
-devnet_start.ps1 @your-github-handle
+/.github/ @PrafulVRaj
+/vage/Cargo.toml @PrafulVRaj
+/vage/Cargo.lock @PrafulVRaj
+rust-toolchain.toml @PrafulVRaj
+devnet_start.sh @PrafulVRaj
+devnet_start.ps1 @PrafulVRaj
 
 # Documentation
-/docs/ @your-github-handle
-README.md @your-github-handle
-/vage/LICENSE @your-github-handle
+/docs/ @PrafulVRaj
+README.md @PrafulVRaj
+/vage/LICENSE @PrafulVRaj
 
 # Core consensus implementation
-/vage/crates/consensus/ @your-github-handle
+/vage/crates/consensus/ @PrafulVRaj
 
 # Execution and state
-/vage/crates/execution/ @your-github-handle
-/vage/crates/state/ @your-github-handle
-/vage/crates/storage/ @your-github-handle
+/vage/crates/execution/ @PrafulVRaj
+/vage/crates/state/ @PrafulVRaj
+/vage/crates/storage/ @PrafulVRaj
 
 # Cryptography and security
-/vage/crates/crypto/ @your-github-handle
+/vage/crates/crypto/ @PrafulVRaj
 
 # Networking
-/vage/crates/networking/ @your-github-handle
-/vage/crates/mempool/ @your-github-handle
+/vage/crates/networking/ @PrafulVRaj
+/vage/crates/mempool/ @PrafulVRaj
 
 # RPC and APIs
-/vage/crates/rpc/ @your-github-handle
+/vage/crates/rpc/ @PrafulVRaj
 
 # Zero-knowledge proofs
-/vage/crates/zk/ @your-github-handle
+/vage/crates/zk/ @PrafulVRaj
 
 # Node implementation
-/vage/bin/node/ @your-github-handle
-/vage/crates/node/ @your-github-handle
+/vage/bin/node/ @PrafulVRaj
+/vage/crates/node/ @PrafulVRaj
 
 # CLI tools
-/vage/bin/cli/ @your-github-handle
+/vage/bin/cli/ @PrafulVRaj
 
 # Network configuration and validators
-/vage/network/ @your-github-handle
-/vage/validators/ @your-github-handle
+/vage/network/ @PrafulVRaj
+/vage/validators/ @PrafulVRaj
 
 # Configuration files
-/vage/configs/ @your-github-handle
+/vage/configs/ @PrafulVRaj
 
 # Tests
-/vage/tests/ @your-github-handle
+/vage/tests/ @PrafulVRaj
 
 # Monitoring
-/monitoring/ @your-github-handle
+/monitoring/ @PrafulVRaj
 
 # Docker
-/vage/docker/ @your-github-handle
+/vage/docker/ @PrafulVRaj
 
 # Scripts
-/scripts/ @your-github-handle
+/scripts/ @PrafulVRaj
