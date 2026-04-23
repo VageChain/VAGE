@@ -28,7 +28,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       
       - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
+        uses: taiki-e/install-action@cargo-tarpaulin
       
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -52,12 +52,13 @@ jobs:
         run: cd vage && cargo tarpaulin --out Xml --output-dir coverage --exclude-files tests/* --timeout 600 --verbose
       
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: vage/coverage/cobertura.xml
           flags: tarpaulin
           fail_ci_if_error: false
           verbose: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   # Code coverage with LLVM
   coverage-llvm:
@@ -73,7 +74,7 @@ jobs:
           components: llvm-tools-preview
       
       - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
       
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -97,12 +98,13 @@ jobs:
         run: cd vage && cargo +nightly llvm-cov --workspace --lcov --output-path lcov.info
       
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: vage/lcov.info
           flags: llvm
           fail_ci_if_error: false
           verbose: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   # Coverage reports generation
   coverage-report:

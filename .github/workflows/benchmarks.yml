@@ -49,23 +49,11 @@ jobs:
           key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Run execution benchmarks
-        run: cd vage && cargo bench --bench execution_bench --no-run
+        run: cd vage && cargo bench --bench gas_bench --no-run
         continue-on-error: true
       
-      - name: Run crypto benchmarks
-        run: cd vage && cargo bench --bench crypto_bench --no-run
-        continue-on-error: true
-      
-      - name: Run state benchmarks
-        run: cd vage && cargo bench --bench state_bench --no-run
-        continue-on-error: true
-      
-      - name: Run consensus benchmarks
-        run: cd vage && cargo bench --bench consensus_bench --no-run
-        continue-on-error: true
-      
-      - name: Run storage benchmarks
-        run: cd vage && cargo bench --bench storage_bench --no-run
+      - name: Run transaction benchmarks
+        run: cd vage && cargo bench --bench transaction_bench --no-run
         continue-on-error: true
       
       - name: Run all benchmarks
@@ -92,7 +80,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       
       - name: Install cargo-flamegraph
-        run: cargo install flamegraph
+        uses: taiki-e/install-action@flamegraph
       
       - name: Run with memory profiling
         run: |
@@ -113,7 +101,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       
       - name: Install cargo-build-time
-        run: cargo install cargo-build-time
+        uses: taiki-e/install-action@cargo-build-time
         continue-on-error: true
       
       - name: Analyze compilation time
