@@ -2,64 +2,64 @@
 # See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Root files and overall project
-* @VageChain
+* @PrafulVRaj
 
 # Build and release
-/.github/ @VageChain
-/vage/Cargo.toml @VageChain
-/vage/Cargo.lock @VageChain
-rust-toolchain.toml @VageChain
-devnet_start.sh @VageChain
-devnet_start.ps1 @VageChain
+/.github/ @PrafulVRaj
+/vage/Cargo.toml @PrafulVRaj
+/vage/Cargo.lock @PrafulVRaj
+rust-toolchain.toml @PrafulVRaj
+devnet_start.sh @PrafulVRaj
+devnet_start.ps1 @PrafulVRaj
 
 # Documentation
-/docs/ @VageChain
-README.md @VageChain
-/vage/LICENSE @VageChain
+/docs/ @PrafulVRaj
+README.md @PrafulVRaj
+/vage/LICENSE @PrafulVRaj
 
 # Core consensus implementation
-/vage/crates/consensus/ @VageChain
+/vage/crates/consensus/ @PrafulVRaj
 
 # Execution and state
-/vage/crates/execution/ @VageChain
-/vage/crates/state/ @VageChain
-/vage/crates/storage/ @VageChain
+/vage/crates/execution/ @PrafulVRaj
+/vage/crates/state/ @PrafulVRaj
+/vage/crates/storage/ @PrafulVRaj
 
 # Cryptography and security
-/vage/crates/crypto/ @VageChain
+/vage/crates/crypto/ @PrafulVRaj
 
 # Networking
-/vage/crates/networking/ @VageChain
-/vage/crates/mempool/ @VageChain
+/vage/crates/networking/ @PrafulVRaj
+/vage/crates/mempool/ @PrafulVRaj
 
 # RPC and APIs
-/vage/crates/rpc/ @VageChain
+/vage/crates/rpc/ @PrafulVRaj
 
 # Zero-knowledge proofs
-/vage/crates/zk/ @VageChain
+/vage/crates/zk/ @PrafulVRaj
 
 # Node implementation
-/vage/bin/node/ @VageChain
-/vage/crates/node/ @VageChain
+/vage/bin/node/ @PrafulVRaj
+/vage/crates/node/ @PrafulVRaj
 
 # CLI tools
-/vage/bin/cli/ @VageChain
+/vage/bin/cli/ @PrafulVRaj
 
 # Network configuration and validators
-/vage/network/ @VageChain
-/vage/validators/ @VageChain
+/vage/network/ @PrafulVRaj
+/vage/validators/ @PrafulVRaj
 
 # Configuration files
-/vage/configs/ @VageChain
+/vage/configs/ @PrafulVRaj
 
 # Tests
-/vage/tests/ @VageChain
+/vage/tests/ @PrafulVRaj
 
 # Monitoring
-/monitoring/ @VageChain
+/monitoring/ @PrafulVRaj
 
 # Docker
-/vage/docker/ @VageChain
+/vage/docker/ @PrafulVRaj
 
 # Scripts
-/scripts/ @VageChain
+/scripts/ @PrafulVRaj
