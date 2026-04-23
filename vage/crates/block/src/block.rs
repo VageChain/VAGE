@@ -146,11 +146,7 @@ impl Block {
 
     /// Verify that the block timestamp doesn't drift too far from the provided local time.
     pub fn verify_block_timestamp_drift(&self, local_time: u64, max_drift: u64) -> bool {
-        let diff = if self.header.timestamp > local_time {
-            self.header.timestamp - local_time
-        } else {
-            local_time - self.header.timestamp
-        };
+        let diff = self.header.timestamp.abs_diff(local_time);
         diff <= max_drift
     }
 
