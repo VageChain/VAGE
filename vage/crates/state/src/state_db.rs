@@ -1035,10 +1035,7 @@ impl StateDb {
         Some(snapshot_key[marker + SNAPSHOT_KEY_PREFIX.len()..].to_vec())
     }
 
-    fn rebuild_tree_for_height(
-        &self,
-        height: u64,
-    ) -> Result<HistoricalState> {
+    fn rebuild_tree_for_height(&self, height: u64) -> Result<HistoricalState> {
         let root = self
             .read_snapshot_root(height)?
             .ok_or_else(|| anyhow::anyhow!("missing snapshot root for height {}", height))?;

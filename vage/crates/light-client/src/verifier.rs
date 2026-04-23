@@ -120,10 +120,7 @@ impl HeaderVerifier {
     /// and the proof is checked against the header hash as public input.  A
     /// failing proof causes `process_pending_batches` to reject the entire
     /// header batch (LC step 4 â€” reject instead of accept).
-    pub fn verify_zk_validity_proof(
-        header: &BlockHeader,
-        verification_key: &[u8],
-    ) -> Result<bool> {
+    pub fn verify_zk_validity_proof(header: &BlockHeader, verification_key: &[u8]) -> Result<bool> {
         // LC Step 2 â€” retrieve the ZK proof from the block header.
         let proof_bytes = header.zk_proof.as_ref().ok_or_else(|| {
             anyhow::anyhow!(

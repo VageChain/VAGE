@@ -210,10 +210,7 @@ impl Startup {
     pub fn restore_mempool_state(node: &Node) -> Result<usize> {
         node.mempool.start()?;
         let pending = node.mempool.pending_count()?;
-        info!(
-            "Mempool state restored. pending_transactions={}",
-            pending
-        );
+        info!("Mempool state restored. pending_transactions={}", pending);
         Ok(pending)
     }
 

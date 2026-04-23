@@ -388,7 +388,7 @@ impl HotAccountCache {
     pub fn len(&self) -> usize {
         self.inner.read().unwrap().len()
     }
-    
+
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
