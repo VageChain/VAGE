@@ -49,6 +49,7 @@ pub struct ExecutionCircuit<F: Field> {
 }
 
 impl<F: Field> ExecutionCircuit<F> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         state_root_before: Option<F>,
         state_root_after: Option<F>,

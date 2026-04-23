@@ -98,7 +98,7 @@ pub enum L1Response {
     Headers(Option<Vec<RpcVerifiedHeaderEnvelope>>),
     BlockProof(Option<Vec<u8>>),
     Transaction(Option<Vec<u8>>),
-    StateProof(Option<RpcStateProofResponse>),
+    StateProof(Box<Option<RpcStateProofResponse>>),
     Error(String),
 }
 
@@ -124,7 +124,7 @@ impl L1Response {
     }
 
     pub fn respond_state_proof(proof: Option<RpcStateProofResponse>) -> Self {
-        Self::StateProof(proof)
+        Self::StateProof(Box::new(proof))
     }
 
     pub fn encode(&self) -> Result<Vec<u8>> {
@@ -360,7 +360,7 @@ mod tests {
         ));
         assert!(matches!(
             L1Response::respond_state_proof(Some(proof.clone())),
-            L1Response::StateProof(Some(payload)) if payload == proof
+            L1Response::StateProof(payload) if *payload == Some(proof)
         ));
     }
 
@@ -378,7 +378,7 @@ mod tests {
             L1Response::decode(&encoded_response).expect("response should decode");
         assert!(matches!(
             decoded_response,
-            L1Response::StateProof(Some(payload)) if payload == sample_state_proof()
+            L1Response::StateProof(payload) if *payload == Some(sample_state_proof())
         ));
     }
 
@@ -434,7 +434,7 @@ mod tests {
             .expect("response should read");
         assert!(matches!(
             decoded_response,
-            L1Response::StateProof(Some(payload)) if payload == sample_state_proof()
+            L1Response::StateProof(payload) if *payload == Some(sample_state_proof())
         ));
     }
 

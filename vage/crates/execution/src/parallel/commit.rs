@@ -36,6 +36,12 @@ pub struct SerializationValidator {
     snapshots: HashMap<usize, VersionSnapshot>,
 }
 
+impl Default for SerializationValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SerializationValidator {
     pub fn new() -> Self {
         Self {
@@ -67,7 +73,7 @@ impl SerializationValidator {
         }
 
         // Check for read-after-write violations
-        for (_read_idx, &tx_idx) in execution_order.iter().enumerate() {
+        for &tx_idx in execution_order {
             if let Some(reads) = read_sets.get(&tx_idx) {
                 for key in reads {
                     if let Some(&writer) = write_history.get(key) {
@@ -113,6 +119,12 @@ impl SerializationValidator {
 pub struct VersionValidator {
     /// Current version number for each key
     current_versions: HashMap<Vec<u8>, u64>,
+}
+
+impl Default for VersionValidator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl VersionValidator {
@@ -241,6 +253,12 @@ pub struct CommitProtocol {
     phase: CommitPhase,
     serialization_validator: SerializationValidator,
     version_validator: VersionValidator,
+}
+
+impl Default for CommitProtocol {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CommitProtocol {

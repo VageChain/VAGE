@@ -26,7 +26,7 @@ use vage_zk::ZkEngine;
 
 #[derive(Clone, Debug)]
 pub enum RpcRequestEvent {
-    SubmitTransaction(Transaction),
+    SubmitTransaction(Box<Transaction>),
     GetBlock(u64),
     GetStateRoot,
     GetNetworkStatus,
@@ -604,7 +604,7 @@ impl Node {
     async fn handle_rpc_request(&mut self, request: RpcRequestEvent) -> Result<()> {
         match request {
             RpcRequestEvent::SubmitTransaction(transaction) => {
-                self.handle_rpc_transaction_submission(transaction).await?;
+                self.handle_rpc_transaction_submission(*transaction).await?;
             }
             RpcRequestEvent::GetBlock(height) => {
                 let _ = self.storage.get_block_header(height)?;
@@ -1120,14 +1120,16 @@ mod tests {
         std::env::temp_dir().join(format!("vage-{name}-{unique}.redb"))
     }
 
-    fn test_config(name: &str, proposer_private_key: [u8; 32]) -> (NodeConfig, PathBuf) {
-        let path = unique_storage_path(name);
-        let mut config = NodeConfig::default();
-        config.storage_path = path.to_string_lossy().into_owned();
-        config.rpc_addr = "127.0.0.1:0"
-            .parse()
-            .expect("ephemeral rpc address should parse");
-        config.proposer_private_key = proposer_private_key;
+    fn test_config(_name: &str, proposer_private_key: [u8; 32]) -> (NodeConfig, PathBuf) {
+        let path = unique_storage_path(_name);
+        let config = NodeConfig {
+            storage_path: path.to_string_lossy().into_owned(),
+            rpc_addr: "127.0.0.1:0"
+                .parse()
+                .expect("ephemeral rpc address should parse"),
+            proposer_private_key,
+            ..Default::default()
+        };
         (config, path)
     }
 

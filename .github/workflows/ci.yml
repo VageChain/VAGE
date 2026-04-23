@@ -34,7 +34,7 @@ jobs:
         working-directory: vage
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
         working-directory: vage
 
   test:
@@ -71,9 +71,8 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Run tests
-        # We exclude sp1-sdk in CI if it requires special toolchains
-        # If it compiles fine with standard rust, --all-features is good
-        run: cargo test --workspace --all-features --verbose
+        # We exclude sp1-sdk in CI since it requires special Windows/ZK toolchains
+        run: cargo test --workspace --verbose
         working-directory: vage
 
   build:

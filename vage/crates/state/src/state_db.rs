@@ -12,6 +12,8 @@ use vage_crypto::hash::sha256;
 use vage_storage::StorageEngine;
 use vage_types::{Account, Address, Transaction};
 
+type HistoricalState = (VerkleTree, HashMap<Vec<u8>, Vec<u8>>, [u8; 32]);
+
 const ACCOUNT_PREFIX: &[u8] = b"account:";
 const STORAGE_PREFIX: &[u8] = b"storage:";
 const STATE_ROOT_KEY: &[u8] = b"metadata:state_root";
@@ -1036,7 +1038,7 @@ impl StateDb {
     fn rebuild_tree_for_height(
         &self,
         height: u64,
-    ) -> Result<(VerkleTree, HashMap<Vec<u8>, Vec<u8>>, [u8; 32])> {
+    ) -> Result<HistoricalState> {
         let root = self
             .read_snapshot_root(height)?
             .ok_or_else(|| anyhow::anyhow!("missing snapshot root for height {}", height))?;

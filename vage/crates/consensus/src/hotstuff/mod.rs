@@ -32,6 +32,12 @@ pub struct HotStuff {
     block_views: HashMap<[u8; 32], u64>,
 }
 
+impl Default for HotStuff {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HotStuff {
     pub fn new() -> Self {
         Self {

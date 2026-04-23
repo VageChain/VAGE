@@ -729,8 +729,7 @@ impl BlockScheduler {
             if already_committed.contains(idx_i) {
                 continue;
             }
-            for j in 0..i {
-                let (idx_j, rws_j) = &batch[j];
+            for (idx_j, rws_j) in batch.iter().take(i) {
                 let raw_i = rws_i.raw_conflicts_with(rws_j);
                 let raw_j = rws_j.raw_conflicts_with(rws_i);
                 let waw: Vec<Vec<u8>> = rws_i

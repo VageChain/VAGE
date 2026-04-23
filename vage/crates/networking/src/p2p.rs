@@ -545,6 +545,7 @@ impl P2PNetwork {
         Ok(outcome)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn receive_block_gossip_message<P, L, C, V, Z, S, Q>(
         &mut self,
         peer_id: PeerId,
@@ -938,7 +939,7 @@ impl RpcSyncClient for P2PNetwork {
             .await_rpc_response(request_id, crate::rpc::DEFAULT_RPC_TIMEOUT)
             .await?
         {
-            L1Response::StateProof(proof) => Ok(proof),
+            L1Response::StateProof(proof) => Ok(*proof),
             L1Response::Error(error) => bail!("state proof request failed: {}", error),
             _ => bail!("unexpected response for state proof request"),
         }

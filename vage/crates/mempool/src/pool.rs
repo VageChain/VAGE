@@ -253,6 +253,10 @@ impl TransactionPool {
         self.size()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.size() == 0
+    }
+
     pub fn add(&mut self, tx: Transaction) -> Result<Hash> {
         self.insert(tx)
     }

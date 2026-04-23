@@ -16,6 +16,8 @@ use tracing::{error, info, warn};
 use vage_block::{BlockBody, BlockHeader};
 use vage_types::{Receipt, Transaction, Validator};
 
+type StateUpdates = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+
 /// Metadata table for database versioning and health checks.
 pub const METADATA: TableDefinition<&str, &str> = TableDefinition::new("metadata");
 pub const DB_VERSION: &str = "1.0.0";
@@ -45,7 +47,7 @@ pub struct StorageEngine {
     db_path: PathBuf,
     /// Read cache for hot state values.
     cache: Mutex<LruCache<Vec<u8>, Vec<u8>>>,
-    buffered_state_writes: Arc<Mutex<Vec<(Vec<u8>, Option<Vec<u8>>)>>>,
+    buffered_state_writes: Arc<Mutex<StateUpdates>>,
     metrics: Arc<StorageMetricsInner>,
     flush_thread_stop: Mutex<Option<mpsc::Sender<()>>>,
     flush_thread_handle: Mutex<Option<JoinHandle<()>>>,
@@ -258,23 +260,22 @@ impl StorageEngine {
         );
 
         // Ã¢â€â‚¬Ã¢â€â‚¬ 1.0.0 Ã¢â€ â€™ 1.1.0 Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        // — 1.0.0 → 1.1.0 ————————————————————————————————————————————————————————————————
         // Added: `chain_id` column in the metadata table for replay-protection.
         if from < (1, 1, 0) && to >= (1, 1, 0) {
             // Only insert the default if the key is absent (safe to run twice).
             if metadata_table.get("chain_id")?.is_none() {
                 metadata_table.insert("chain_id", "1")?;
-                info!("Migration 1.0.0Ã¢â€ â€™1.1.0: initialised chain_id=1 in metadata");
+                info!("Migration 1.0.0→1.1.0: initialised chain_id=1 in metadata");
             }
         }
 
-        // Ã¢â€â‚¬Ã¢â€â‚¬ 1.1.0 Ã¢â€ â€™ 1.2.0 Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        // — 1.1.0 → 1.2.0 ————————————————————————————————————————————————————————————————
         // Added: `schema_hash` integrity field to detect bit-rot or partial writes.
-        if from < (1, 2, 0) && to >= (1, 2, 0) {
-            if metadata_table.get("schema_hash")?.is_none() {
-                // SHA-256 of the canonical table list at 1.2.0 Ã¢â‚¬â€ computed offline.
-                metadata_table.insert("schema_hash", "genesis")?;
-                info!("Migration 1.1.0Ã¢â€ â€™1.2.0: initialised schema_hash placeholder");
-            }
+        if from < (1, 2, 0) && to >= (1, 2, 0) && metadata_table.get("schema_hash")?.is_none() {
+            // SHA-256 of the canonical table list at 1.2.0 — computed offline.
+            metadata_table.insert("schema_hash", "genesis")?;
+            info!("Migration 1.1.0→1.2.0: initialised schema_hash placeholder");
         }
 
         // Ã¢â€â‚¬Ã¢â€â‚¬ future migrations go here Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -634,14 +635,14 @@ impl StorageEngine {
     }
 
     /// Atomically commit multiple state changes.
-    pub fn atomic_state_commit(&self, changes: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> Result<()> {
+    pub fn atomic_state_commit(&self, changes: StateUpdates) -> Result<()> {
         self.atomic_state_commit_with_rollback(changes).map(|_| ())
     }
 
     pub fn atomic_state_commit_with_rollback(
         &self,
-        changes: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-    ) -> Result<Vec<(Vec<u8>, Option<Vec<u8>>)>> {
+        changes: StateUpdates,
+    ) -> Result<StateUpdates> {
         let tx = self.begin_write()?;
         let mut rollback_changes = Vec::with_capacity(changes.len());
         {
@@ -1418,7 +1419,7 @@ impl StorageEngine {
 
     fn flush_buffered_state_writes_inner(
         db: &Arc<Database>,
-        buffered_state_writes: &Arc<Mutex<Vec<(Vec<u8>, Option<Vec<u8>>)>>>,
+        buffered_state_writes: &Arc<Mutex<StateUpdates>>,
         metrics: &Arc<StorageMetricsInner>,
     ) -> Result<usize> {
         let pending = {

@@ -201,9 +201,8 @@ impl Mempool {
         }
 
         // 2. Full validation (signature, nonce, balance, gas, duplicates).
-        self.validator.validate(&tx).map_err(|e| {
+        self.validator.validate(&tx).inspect_err(|_| {
             self.record_rejected();
-            e
         })?;
 
         // 3. Capacity enforcement with priority-based eviction.

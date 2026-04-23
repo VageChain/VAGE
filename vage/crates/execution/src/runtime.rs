@@ -74,6 +74,12 @@ pub struct Runtime {
     pub contract_cache: Mutex<HashMap<[u8; 32], Vec<u8>>>,
 }
 
+impl Default for Runtime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Runtime {
     pub fn new() -> Self {
         Self {
@@ -628,13 +634,13 @@ mod tests {
             .expect("contract placeholder update should succeed");
 
         assert!(runtime.validate_contract_bytecode(&[]).is_err());
-        assert!(runtime.validate_contract_bytecode(&vec![0u8; 8]).is_err());
+        assert!(runtime.validate_contract_bytecode(&[0u8; 8]).is_err());
         runtime
             .validate_contract_bytecode(&[0x01])
             .expect("single-byte bytecode should be valid");
         assert!(runtime.invoke_method(&[], &[1u8]).is_err());
         assert!(runtime
-            .detect_infinite_execution_loops(&vec![1u8; 10_001], &[])
+            .detect_infinite_execution_loops(&[1u8; 10_001], &[])
             .is_err());
 
         let bad_call = signed_contract_call(&sender_key, contract, 0, 0, vec![1u8; 5_000]);

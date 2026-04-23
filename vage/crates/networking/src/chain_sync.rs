@@ -412,9 +412,7 @@ where
         // with a thread pool emulation (true async parallelism is wired at the caller).
         // Using std threads here keeps this sync-callable without a runtime handle.
         let total = to.saturating_sub(from) + 1;
-        let chunk = ((total + self.config.parallel_downloads as u64 - 1)
-            / self.config.parallel_downloads as u64)
-            .max(1);
+        let chunk = total.div_ceil(self.config.parallel_downloads as u64).max(1);
 
         let ranges: Vec<(u64, u64)> = (0..self.config.parallel_downloads as u64)
             .map(|i| {

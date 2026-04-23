@@ -370,7 +370,7 @@ mod tests {
         );
 
         assert!(!qc
-            .verify(&[validator.clone()], 2)
+            .verify(std::slice::from_ref(&validator), 2)
             .expect("threshold check should run"));
 
         let other_validator = validator_from_signing_key(&signing_key(7));
@@ -500,7 +500,7 @@ mod tests {
         );
 
         assert!(!qc
-            .verify(&[validator.clone()], 2)
+            .verify(std::slice::from_ref(&validator), 2)
             .expect("qc verification should succeed"));
         assert!(!qc
             .verify_with_voting_power(&[validator], 2, 2)

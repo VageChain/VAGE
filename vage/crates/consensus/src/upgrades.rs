@@ -46,7 +46,7 @@ impl UpgradeManager {
 
     /// Submit a new upgrade proposal for validator voting.
     pub fn submit_proposal(&mut self, proposal: UpgradeProposal) -> Result<()> {
-        if proposal.activation_height <= 0 {
+        if proposal.activation_height == 0 {
             bail!("Activation height must be greater than current height");
         }
         self.pending_upgrades.push(proposal);

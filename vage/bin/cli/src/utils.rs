@@ -40,7 +40,7 @@ pub fn generate_keypair() -> (String, String) {
     let signing_key = SigningKey::from_bytes(&seed);
     let verifying_key = signing_key.verifying_key();
 
-    let privkey_hex = format!("0x{}", hex::encode(&seed));
+    let privkey_hex = format!("0x{}", hex::encode(seed));
     let pubkey_hex = format!("0x{}", hex::encode(verifying_key.as_bytes()));
 
     (privkey_hex, pubkey_hex)

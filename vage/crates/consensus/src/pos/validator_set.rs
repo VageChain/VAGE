@@ -8,6 +8,12 @@ pub struct ValidatorSet {
     total_stake: U256,
 }
 
+impl Default for ValidatorSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ValidatorSet {
     pub fn new() -> Self {
         Self {

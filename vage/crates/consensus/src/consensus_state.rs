@@ -516,10 +516,7 @@ impl ConsensusStateManager {
 
     /// item 7: load from redb on startup; falls back to fresh state.
     pub fn load_or_init(storage: Arc<StorageEngine>) -> Result<Self> {
-        let state = match load_consensus_state(&storage)? {
-            Some(s) => s,
-            None => ConsensusState::new(),
-        };
+        let state = load_consensus_state(&storage)?.unwrap_or_default();
         Ok(Self { state, storage })
     }
 
@@ -728,10 +725,10 @@ mod tests {
         let val_a = Validator::new(a, [1u8; 32], primitive_types::U256::from(100u64));
         let val_b = Validator::new(b, [2u8; 32], primitive_types::U256::from(200u64));
 
-        let hash1 = ConsensusState::compute_validator_set_hash(&[val_a.clone()]);
-        let hash2 = ConsensusState::compute_validator_set_hash(&[val_b.clone()]);
+        let hash1 = ConsensusState::compute_validator_set_hash(std::slice::from_ref(&val_a));
+        let hash2 = ConsensusState::compute_validator_set_hash(std::slice::from_ref(&val_b));
         let hash12 = ConsensusState::compute_validator_set_hash(&[val_a.clone(), val_b.clone()]);
-        let hash21 = ConsensusState::compute_validator_set_hash(&[val_b.clone(), val_a.clone()]);
+        let hash21 = ConsensusState::compute_validator_set_hash(&[val_b, val_a]);
 
         assert_ne!(hash1, hash2);
         assert_ne!(hash1, hash12);

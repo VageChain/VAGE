@@ -18,6 +18,8 @@ use vage_state::{ReadOnlyStateSnapshot, StateBatchOp, StateDB};
 use vage_storage::{Schema, StorageEngine};
 use vage_types::{Account, Log, Receipt, Transaction};
 
+type AccessSet = (Vec<Vec<u8>>, Vec<Vec<u8>>);
+
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct ExecutionMetrics {
     pub executed_transactions: usize,
@@ -332,7 +334,7 @@ impl Executor {
         &self,
         transactions: &[Transaction],
     ) -> Vec<TransactionDependency> {
-        let access_sets: Vec<(Vec<Vec<u8>>, Vec<Vec<u8>>)> = transactions
+        let access_sets: Vec<AccessSet> = transactions
             .iter()
             .map(|tx| {
                 let read_set = self.transaction_read_set(tx);

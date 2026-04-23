@@ -12,10 +12,7 @@ pub async fn health_check(State(context): State<Arc<RpcContext>>) -> Json<Value>
     });
 
     // 1. Check Storage Engine
-    let storage_ok = match context.storage.get_metrics() {
-        Ok(_) => true,
-        Err(_) => false,
-    };
+    let storage_ok = context.storage.get_metrics().is_ok();
     health_info["services"]["storage"] = json!({
         "ok": storage_ok,
     });

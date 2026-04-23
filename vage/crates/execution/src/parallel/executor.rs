@@ -388,6 +388,10 @@ impl HotAccountCache {
     pub fn len(&self) -> usize {
         self.inner.read().unwrap().len()
     }
+    
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 
     pub fn clear(&self) {
         self.inner.write().unwrap().clear();
@@ -730,13 +734,13 @@ pub struct DeterministicExecutionGuard;
 
 impl DeterministicExecutionGuard {
     /// Sort tasks into canonical tx_index ascending order before each round.
-    pub fn sort_tasks(tasks: &mut Vec<ParallelExecutorTask>) {
+    pub fn sort_tasks(tasks: &mut [ParallelExecutorTask]) {
         tasks.sort_unstable_by_key(|t| t.tx_index);
     }
 
     /// Sort raw outcomes into canonical tx_index ascending order before
     /// conflict detection.
-    pub fn sort_outcomes(outcomes: &mut Vec<RawOutcome>) {
+    pub fn sort_outcomes(outcomes: &mut [RawOutcome]) {
         outcomes.sort_unstable_by_key(|o| o.tx_index);
     }
 
@@ -1083,7 +1087,7 @@ impl ParallelExecutor {
         // Phase 25 â€” state consistency check baseline
         let mut consistency_checker = {
             let st = state.lock().map_err(|_| anyhow!("State lock poisoned"))?;
-            StateConsistencyChecker::new(&*st)
+            StateConsistencyChecker::new(&st)
         };
 
         // Phase 25 â€” conflict resolver using configured policy
@@ -1099,7 +1103,7 @@ impl ParallelExecutor {
                 pf.enqueue_batch(&pending);
                 // Prefetch against a snapshot â€” lock is held only for this block
                 if let Ok(st) = state.lock() {
-                    pf.prefetch(&*st, &self.hot_cache);
+                    pf.prefetch(&st, &self.hot_cache);
                 }
             }
         }
@@ -1257,7 +1261,7 @@ impl ParallelExecutor {
             let st = state.lock().map_err(|_| anyhow!("State lock poisoned"))?;
             Self::finalize(
                 &committed,
-                &*st,
+                &st,
                 &self.hot_cache,
                 self.config.write_batch_size,
             )?;
@@ -1398,8 +1402,7 @@ impl ParallelExecutor {
             let write_i: HashSet<&[u8]> = rws_i.write_set.iter().map(|v| v.as_slice()).collect();
             let read_i: HashSet<&[u8]> = rws_i.read_set.iter().map(|v| v.as_slice()).collect();
 
-            for j in (i + 1)..n {
-                let (idx_j, rws_j) = &rw_pairs[j];
+            for (idx_j, rws_j) in rw_pairs.iter().take(n).skip(i + 1) {
                 let write_j: HashSet<&[u8]> =
                     rws_j.write_set.iter().map(|v| v.as_slice()).collect();
                 let read_j: HashSet<&[u8]> = rws_j.read_set.iter().map(|v| v.as_slice()).collect();

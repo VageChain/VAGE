@@ -535,7 +535,7 @@ impl CommitRevealPool {
 // â”€â”€ item 11: randomization helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn randomize_ordering(
-    pairs: &mut Vec<(CommitTransaction, Transaction)>,
+    pairs: &mut [(CommitTransaction, Transaction)],
     seed: &[u8; 32],
     height: u64,
 ) {

@@ -14,6 +14,12 @@ pub struct VerkleTree {
     pub branching_factor: usize,
 }
 
+impl Default for VerkleTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VerkleTree {
     pub fn new() -> Self {
         Self {

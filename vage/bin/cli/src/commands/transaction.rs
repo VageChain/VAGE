@@ -44,6 +44,7 @@ pub async fn handle_transaction_command(rpc_url: &str, action: TransactionComman
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn send_transaction(
     client: &reqwest::Client,
     rpc_url: &str,
@@ -100,7 +101,7 @@ async fn send_transaction(
 
     tx["signature"] = json!(sig_bytes);
 
-    println!("✅ Signature: 0x{}", hex::encode(&sig_bytes));
+    println!("✅ Signature: 0x{}", hex::encode(sig_bytes));
     println!();
 
     // Submit transaction

@@ -167,19 +167,19 @@ impl DependencyGraph {
 
         // Initialise maps for every known tx so independent nodes are visible.
         for &idx in self.rw_sets.keys() {
-            self.edges.entry(idx).or_insert_with(HashSet::new);
-            self.predecessors.entry(idx).or_insert_with(HashSet::new);
+            self.edges.entry(idx).or_default();
+            self.predecessors.entry(idx).or_default();
         }
 
         for overlap in &self.overlaps {
             let (from, to) = (overlap.tx_a, overlap.tx_b);
             self.edges
                 .entry(from)
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .insert(to);
             self.predecessors
                 .entry(to)
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .insert(from);
         }
     }
@@ -188,11 +188,11 @@ impl DependencyGraph {
     pub fn add_edge(&mut self, from: usize, to: usize) {
         self.edges
             .entry(from)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(to);
         self.predecessors
             .entry(to)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(from);
     }
 
@@ -443,8 +443,8 @@ impl DependencyGraph {
             .iter()
             .map(|(&idx, rws)| NodeExport {
                 tx_index: idx,
-                read_set: rws.read_set.iter().map(hex_key).collect(),
-                write_set: rws.write_set.iter().map(hex_key).collect(),
+                read_set: rws.read_set.iter().map(|k| hex_key(k)).collect(),
+                write_set: rws.write_set.iter().map(|k| hex_key(k)).collect(),
                 is_independent: self
                     .predecessors
                     .get(&idx)
@@ -483,7 +483,7 @@ impl DependencyGraph {
     }
 }
 
-fn hex_key(k: &Vec<u8>) -> String {
+fn hex_key(k: &[u8]) -> String {
     k.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
@@ -729,7 +729,7 @@ impl DependencyAnalyzer {
         }
         let mut graph: HashMap<usize, Vec<usize>> = HashMap::new();
         for dep in &detector.dependencies {
-            graph.entry(dep.to).or_insert_with(Vec::new).push(dep.from);
+            graph.entry(dep.to).or_default().push(dep.from);
         }
         Ok(graph)
     }
@@ -739,9 +739,9 @@ impl DependencyAnalyzer {
         total_tx: usize,
     ) -> Result<Vec<usize>> {
         let mut in_degree = vec![0usize; total_tx];
-        for tx_idx in 0..total_tx {
+        for (tx_idx, degree) in in_degree.iter_mut().enumerate() {
             if let Some(preds) = graph.get(&tx_idx) {
-                in_degree[tx_idx] = preds.len();
+                *degree = preds.len();
             }
         }
         let mut queue: Vec<usize> = (0..total_tx).filter(|&i| in_degree[i] == 0).collect();

@@ -51,13 +51,13 @@ pub async fn get_block_by_height(
     let header = context
         .storage()
         .get_block_header(height)
-        .map_err(|e| RpcError::DatabaseError(e))?
+        .map_err(RpcError::DatabaseError)?
         .ok_or_else(|| RpcError::BlockNotFound(height))?;
 
     let body = context
         .storage()
         .get_block_body(height)
-        .map_err(|e| RpcError::DatabaseError(e))?
+        .map_err(RpcError::DatabaseError)?
         .unwrap_or_else(BlockBody::new);
 
     Ok(json!({
@@ -81,7 +81,7 @@ pub async fn get_latest_block(context: &Arc<RpcContext>) -> Result<Value, RpcErr
     let height = context
         .storage()
         .latest_block_height()
-        .map_err(|e| RpcError::DatabaseError(e))?;
+        .map_err(RpcError::DatabaseError)?;
     get_block_by_height(height, context).await
 }
 
@@ -92,7 +92,7 @@ async fn get_block_header_internal(
     let header = context
         .storage()
         .get_block_header(height)
-        .map_err(|e| RpcError::DatabaseError(e))?
+        .map_err(RpcError::DatabaseError)?
         .ok_or_else(|| RpcError::BlockNotFound(height))?;
 
     Ok(json!(header))
@@ -107,7 +107,7 @@ async fn get_block_transactions_internal(
     let body = context
         .storage()
         .get_block_body(height)
-        .map_err(|e| RpcError::DatabaseError(e))?
+        .map_err(RpcError::DatabaseError)?
         .ok_or_else(|| RpcError::BlockNotFound(height))?;
 
     let txs: Vec<_> = body
@@ -128,7 +128,7 @@ async fn get_block_receipts_internal(
     let body = context
         .storage()
         .get_block_body(height)
-        .map_err(|e| RpcError::DatabaseError(e))?
+        .map_err(RpcError::DatabaseError)?
         .ok_or_else(|| RpcError::BlockNotFound(height))?;
 
     let mut receipts = Vec::new();

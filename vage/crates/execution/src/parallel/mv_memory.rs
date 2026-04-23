@@ -21,6 +21,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tracing::{debug, trace};
 
+type VersionedValues = Vec<(SnapshotId, Vec<u8>)>;
+
 //
 // Common identifiers
 //
@@ -490,7 +492,7 @@ impl MVMemory {
 pub struct Snapshot {
     pub id: SnapshotId,
     /// key  versioned values: (snapshot_id, value).
-    pub versions: Arc<HashMap<Vec<u8>, Vec<(SnapshotId, Vec<u8>)>>>,
+    pub versions: Arc<HashMap<Vec<u8>, VersionedValues>>,
 }
 
 impl Snapshot {
@@ -505,8 +507,7 @@ impl Snapshot {
         self.versions.get(key).and_then(|versions| {
             versions
                 .iter()
-                .filter(|(vid, _)| vid <= &self.id)
-                .last()
+                .rfind(|(vid, _)| vid <= &self.id)
                 .map(|(_, val)| val.clone())
         })
     }
@@ -543,7 +544,7 @@ impl Default for VersionedMemoryConfig {
 /// Legacy multi-version memory (snapshot-based, used by `ParallelExecutor`).
 pub struct VersionedMemory {
     config: VersionedMemoryConfig,
-    versions: HashMap<Vec<u8>, Vec<(SnapshotId, Vec<u8>)>>,
+    versions: HashMap<Vec<u8>, VersionedValues>,
     current_snapshot_id: SnapshotId,
     snapshots: HashMap<SnapshotId, Snapshot>,
 }
@@ -591,7 +592,7 @@ impl VersionedMemory {
     ) -> Result<()> {
         self.versions
             .entry(key)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((snapshot_id, value));
         Ok(())
     }
@@ -615,8 +616,7 @@ impl VersionedMemory {
         self.versions.get(key).and_then(|versions| {
             versions
                 .iter()
-                .filter(|(vid, _)| vid <= &snapshot_id)
-                .last()
+                .rfind(|(vid, _)| vid <= &snapshot_id)
                 .map(|(_, val)| val.clone())
         })
     }

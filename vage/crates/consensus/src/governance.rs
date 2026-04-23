@@ -59,6 +59,12 @@ pub struct GovernanceManager {
     next_id: u64,
 }
 
+impl Default for GovernanceManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GovernanceManager {
     pub fn new() -> Self {
         Self {

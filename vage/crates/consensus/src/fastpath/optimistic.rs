@@ -60,6 +60,12 @@ pub struct FastPath {
     pub timeout: Duration,
 }
 
+impl Default for FastPath {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FastPath {
     pub fn new() -> Self {
         Self {

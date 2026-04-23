@@ -210,6 +210,12 @@ pub struct Gossip {
     peer_store: Option<Arc<Mutex<PeerStore>>>,
 }
 
+impl Default for Gossip {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Gossip {
     pub fn new() -> Self {
         Self {
@@ -438,6 +444,7 @@ impl Gossip {
             .context("invalid transaction gossip payload")
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn receive_block_gossip_message<P, L, C, V, S, Q>(
         &mut self,
         peer_id: PeerId,

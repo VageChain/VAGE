@@ -50,8 +50,8 @@ impl HeaderVerifier {
     /// Verify a quorum of consensus signatures for BFT finality verification using voting power.
     pub fn verify_consensus_signatures(
         header_hash: Hash,
-        signatures: &Vec<(Address, [u8; 64])>,
-        validator_set: &Vec<Validator>,
+        signatures: &[(Address, [u8; 64])],
+        validator_set: &[Validator],
     ) -> Result<bool> {
         // 1. Calculate the total voting power of the active validator set.
         let total_voting_power: u64 = validator_set.iter().map(|v| v.voting_power).sum();
@@ -122,7 +122,7 @@ impl HeaderVerifier {
     /// header batch (LC step 4 â€” reject instead of accept).
     pub fn verify_zk_validity_proof(
         header: &BlockHeader,
-        verification_key: &Vec<u8>,
+        verification_key: &[u8],
     ) -> Result<bool> {
         // LC Step 2 â€” retrieve the ZK proof from the block header.
         let proof_bytes = header.zk_proof.as_ref().ok_or_else(|| {
@@ -144,7 +144,7 @@ impl HeaderVerifier {
         //   * `Sp1Verifier::verify` runs steps 4â€“9 of the SP1 verification
         //     pipeline (deserialize â†’ validate structure â†’ trace commitments
         //     â†’ polynomial constraints â†’ final validity).
-        let verifier = vage_zk::Sp1Verifier::new(verification_key.clone());
+        let verifier = vage_zk::Sp1Verifier::new(verification_key.to_owned());
         if !verifier.verify(proof_bytes, &public_inputs)? {
             bail!(
                 "ZK transition proof verification failed for block 0x{}",
@@ -163,7 +163,7 @@ impl HeaderVerifier {
     /// reject otherwise) is enforced automatically by the error propagation.
     pub fn confirm_state_transition_validity(
         header: &BlockHeader,
-        verification_key: &Vec<u8>,
+        verification_key: &[u8],
     ) -> Result<bool> {
         Self::verify_zk_validity_proof(header, verification_key)
     }
@@ -173,7 +173,7 @@ impl HeaderVerifier {
         header: &BlockHeader,
         parent: &BlockHeader,
         proposer_public_key: &[u8; 32],
-        zk_verification_key: &Vec<u8>,
+        zk_verification_key: &[u8],
     ) -> Result<()> {
         Self::verify_linkage(header, parent)?;
 

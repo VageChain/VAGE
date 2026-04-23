@@ -23,6 +23,12 @@ pub struct StakingManager {
     storage: Option<Arc<StorageEngine>>,
 }
 
+impl Default for StakingManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StakingManager {
     pub fn new() -> Self {
         Self {

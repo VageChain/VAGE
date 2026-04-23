@@ -43,7 +43,7 @@ impl Proposer {
     }
 
     pub fn is_leader(&self, view: u64) -> bool {
-        self.validator_id != Address::zero() && (view % 2 == 0 || view == 1)
+        self.validator_id != Address::zero() && (view.is_multiple_of(2) || view == 1)
     }
 
     pub fn select_transactions(&self, limit: usize) -> Result<Vec<Transaction>> {

@@ -114,7 +114,7 @@ async fn get_storage_internal(
         .map_err(|e| RpcError::InternalError(format!("failed to fetch storage: {}", e)))?;
 
     Ok(value
-        .map(|v| hex::encode(v))
+        .map(hex::encode)
         .unwrap_or_else(|| "0x0000".to_string()))
 }
 
